@@ -111,6 +111,7 @@ function App() {
                 <Route index element={<HomePage />} />
                 <Route path="notifications" element={<NotificationsPage />} />
                 <Route path="profile" element={<ProfilePage />} />
+                <Route path="profile/:userId" element={<ProfilePage />} />
                 <Route
                   path="admin"
                   element={

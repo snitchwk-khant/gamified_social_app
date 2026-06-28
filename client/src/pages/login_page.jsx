@@ -18,7 +18,7 @@ function LoginPage() {
     try {
       await signIn({ email, password });
       navigate("/");
-    } catch (err) {
+    } catch {
       setError("Invalid email or password");
     } finally {
       setLoading(false);

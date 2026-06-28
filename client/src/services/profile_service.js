@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase";
+import { getActiveStoryCountByUserId } from "./stories_service";
 
 export function formatSkillsForDisplay(skills) {
   if (Array.isArray(skills)) {
@@ -34,7 +35,57 @@ function normalizeSkillsForStorage(skillsValue) {
     .join(", ");
 }
 
+export function parseProfileAlbumUrls(value) {
+  if (Array.isArray(value)) {
+    return value.filter(Boolean).slice(0, 6);
+  }
+
+  if (typeof value !== "string") {
+    return [];
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (Array.isArray(parsed)) {
+      return parsed.filter(Boolean).slice(0, 6);
+    }
+  } catch {
+    return trimmed
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .slice(0, 6);
+  }
+
+  return [];
+}
+
 const PROFILE_FIELDS = "*";
+
+function normalizeProfileMusicValue(value) {
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  return value ? String(value).trim() : "";
+}
+
+function normalizeProfile(profile) {
+  if (!profile) {
+    return profile;
+  }
+
+  return {
+    ...profile,
+    favorite_music: normalizeProfileMusicValue(profile.favorite_music),
+  };
+}
 
 function buildDefaultProfile(user) {
   const email = user?.email || "";
@@ -59,7 +110,7 @@ async function createDefaultProfile(user) {
     .single();
 
   if (!error) {
-    return data;
+    return normalizeProfile(data);
   }
 
   if (error.code === "23505") {
@@ -74,7 +125,7 @@ async function createDefaultProfile(user) {
     }
 
     if (existingProfile) {
-      return existingProfile;
+      return normalizeProfile(existingProfile);
     }
   }
 
@@ -119,7 +170,53 @@ export async function getProfile() {
     }
   }
 
-  return data;
+  return normalizeProfile(data);
+}
+
+export async function getProfileById(userId) {
+  if (!userId) {
+    throw new Error("Missing user ID");
+  }
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select(PROFILE_FIELDS)
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("getProfileById Error:", error);
+    throw error;
+  }
+
+  return normalizeProfile(data);
+}
+
+export async function getProfileStats(userId, stories = null) {
+  if (!userId) {
+    return {
+      postsCount: 0,
+      storiesCount: 0,
+    };
+  }
+
+  const [{ count: postsCount, error: postsError }, storiesCount] = await Promise.all([
+    supabase
+      .from("posts")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("is_anonymous", false),
+    getActiveStoryCountByUserId(userId, stories),
+  ]);
+
+  if (postsError) {
+    console.error("getProfileStats Posts Error:", postsError);
+  }
+
+  return {
+    postsCount: postsError ? 0 : postsCount || 0,
+    storiesCount,
+  };
 }
 
 export async function uploadAvatar(userId, file) {
@@ -155,6 +252,37 @@ export async function uploadAvatar(userId, file) {
   return publicUrlData?.publicUrl || null;
 }
 
+export async function uploadProfileAlbumImage(userId, file) {
+  if (!file || !userId) {
+    return null;
+  }
+
+  if (!file.type?.startsWith("image/")) {
+    throw new Error("Profile album uploads must be images.");
+  }
+
+  const extension = file.name.split(".").pop() || "jpg";
+  const timestamp = Date.now();
+  const filePath = `${userId}/album-${timestamp}.${extension}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from("avatars")
+    .upload(filePath, file, {
+      cacheControl: "3600",
+      upsert: true,
+      contentType: file.type,
+    });
+
+  if (uploadError) {
+    console.error("Profile album upload failed:", uploadError);
+    throw uploadError;
+  }
+
+  const { data: publicUrlData } = supabase.storage.from("avatars").getPublicUrl(filePath);
+
+  return publicUrlData?.publicUrl || null;
+}
+
 export async function saveProfile(userId, profileData, avatarFile) {
   if (!userId) {
     throw new Error("Missing user ID");
@@ -172,9 +300,14 @@ export async function saveProfile(userId, profileData, avatarFile) {
     avatar_url,
     full_name: profileData.full_name,
     bio: profileData.bio,
+    hobby: profileData.hobby,
+    relationship_status: profileData.relationship_status,
+    zodiac_sign: profileData.zodiac_sign,
     phone: profileData.phone,
+    telegram_username: profileData.telegram_username,
     birthday: profileData.birthday,
-    location: profileData.location,
+    favorite_music: normalizeProfileMusicValue(profileData.favorite_music),
+    
     skills,
     updated_at: new Date().toISOString(),
   };
@@ -187,7 +320,14 @@ export async function saveProfile(userId, profileData, avatarFile) {
     .maybeSingle();
 
   if (error) {
-    console.error("saveProfile Error:", error);
+    console.error("saveProfile Error:", {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      error,
+    });
+
     throw error;
   }
 
@@ -203,14 +343,18 @@ export async function saveProfile(userId, profileData, avatarFile) {
       throw insertError;
     }
 
-    return insertedProfile;
+    return normalizeProfile(insertedProfile);
   }
 
-  return data;
+  return normalizeProfile(data);
 }
 
 export default {
   getProfile,
+  getProfileById,
+  getProfileStats,
+  parseProfileAlbumUrls,
   saveProfile,
   uploadAvatar,
+  uploadProfileAlbumImage,
 };

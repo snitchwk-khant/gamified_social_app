@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../../context/auth_context";
 import { useTheme } from "../../context/theme_context";
 import { supabase } from "../../lib/supabase";
@@ -11,8 +12,11 @@ function PostCard({
   date,
   commentsCount = 0,
   isAnonymous = false,
-  authorName = "User",
+  authorUserId = null,
+  authorName = "",
   authorAvatar = null,
+  profile = null,
+  onCommentCreated,
 }) {
   const { user } = useAuth();
   const { isDark } = useTheme();
@@ -22,6 +26,10 @@ function PostCard({
   const [loadingComments, setLoadingComments] = useState(false);
   const [commentCount, setCommentCount] = useState(commentsCount);
   const maskedAvatarPath = "/masked-avatar.jpg";
+
+  useEffect(() => {
+    setCommentCount(commentsCount);
+  }, [commentsCount, id]);
 
   async function loadComments() {
     setLoadingComments(true);
@@ -74,11 +82,19 @@ function PostCard({
 
     const formattedComments = commentRows.map((comment) => {
       const profile = !comment.is_anonymous ? profileMap[comment.user_id] : null;
+      const fullName = profile?.full_name || "";
 
       return {
         ...comment,
-        author_name: comment.is_anonymous ? "Masked" : profile?.full_name || "User",
+        author_name: comment.is_anonymous ? "Masked" : fullName,
         author_avatar: comment.is_anonymous ? maskedAvatarPath : profile?.avatar_url || null,
+        profile: comment.is_anonymous
+          ? null
+          : {
+              id: profile?.id || comment.user_id,
+              full_name: fullName,
+              avatar_url: profile?.avatar_url || null,
+            },
       };
     });
 
@@ -137,6 +153,10 @@ function PostCard({
       return false;
     }
 
+    if (typeof onCommentCreated === "function") {
+      onCommentCreated(id);
+    }
+
     await loadComments();
 
     return true;
@@ -150,31 +170,73 @@ function PostCard({
     >
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0">
-          {isAnonymous ? (
-            <img
-              src={maskedAvatarPath}
-              alt="Masked"
-              className="h-10 w-10 rounded-full object-cover"
-            />
-          ) : authorAvatar ? (
-            <img
-              src={authorAvatar}
-              alt={authorName}
-              className="h-10 w-10 rounded-full object-cover"
-            />
+          {(() => {
+            const displayName = profile?.full_name || authorName || "";
+            const displayAvatar = profile?.avatar_url ?? authorAvatar ?? null;
+            const initial = (displayName?.charAt(0) || "").toUpperCase();
+            const profilePath = !isAnonymous && authorUserId ? `/profile/${authorUserId}` : null;
+
+            if (isAnonymous) {
+              return (
+                <img
+                  src={maskedAvatarPath}
+                  alt="Masked"
+                  className="h-10 w-10 rounded-full object-cover"
+                />
+              );
+            }
+
+            if (displayAvatar) {
+              const avatar = (
+                <img
+                  src={displayAvatar}
+                  alt={displayName || "Profile avatar"}
+                  className="h-10 w-10 rounded-full object-cover"
+                />
+              );
+
+              return profilePath ? (
+                <Link to={profilePath} aria-label={`Open ${displayName || "user"} profile`} className="shrink-0">
+                  {avatar}
+                </Link>
+              ) : (
+                avatar
+              );
+            }
+
+            const avatarFallback = (
+              <div
+                className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold ${
+                  isDark ? "bg-slate-700 text-white" : "bg-slate-200 text-slate-700"
+                }`}
+              >
+                {initial}
+              </div>
+            );
+
+            return profilePath ? (
+              <Link to={profilePath} aria-label={`Open ${displayName || "user"} profile`} className="shrink-0">
+                {avatarFallback}
+              </Link>
+            ) : (
+              avatarFallback
+            );
+          })()}
+
+          {isAnonymous || !authorUserId ? (
+            <p className={`truncate text-sm font-medium ${isDark ? "text-slate-200" : "text-slate-900"}`}>
+              {isAnonymous ? "Masked" : profile?.full_name || authorName}
+            </p>
           ) : (
-            <div
-              className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold ${
-                isDark ? "bg-slate-700 text-white" : "bg-slate-200 text-slate-700"
+            <Link
+              to={`/profile/${authorUserId}`}
+              className={`truncate text-sm font-medium transition ${
+                isDark ? "text-slate-200 hover:text-sky-300" : "text-slate-900 hover:text-[#c446ff]"
               }`}
             >
-              {(authorName?.charAt(0) || "U").toUpperCase()}
-            </div>
+              {profile?.full_name || authorName}
+            </Link>
           )}
-
-          <p className={`truncate text-sm font-medium ${isDark ? "text-slate-200" : "text-slate-900"}`}>
-            {isAnonymous ? "Masked" : authorName}
-          </p>
         </div>
 
         <span

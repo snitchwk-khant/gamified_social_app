@@ -33,7 +33,7 @@ async function fetchProfile(token) {
     });
 
     return response.data.user;
-  } catch (error) {
+  } catch {
     logout();
     return null;
   }

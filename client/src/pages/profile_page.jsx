@@ -1,86 +1,124 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useParams } from "react-router-dom";
 import { useAuth } from "../context/auth_context";
 import { useTheme } from "../context/theme_context";
 import {
-  formatSkillsForDisplay,
   getProfile,
+  getProfileById,
+  getProfileStats,
+  parseProfileAlbumUrls,
   saveProfile,
-  uploadAvatar,
+  uploadProfileAlbumImage,
 } from "../services/profile_service";
 
+const EMPTY_FORM = {
+  full_name: "",
+  bio: "",
+  hobby: "",
+  relationship_status: "",
+  phone: "",
+  telegram_username: "",
+  birthday: "",
+  favorite_music: "",
+};
+
+const RELATIONSHIP_OPTIONS = ["Single", "Relationship", "Situationship"];
+
 function ProfilePage() {
+  const { userId: routeUserId } = useParams();
   const { user, refreshUserProfile } = useAuth();
   const { isDark } = useTheme();
+  const albumInputRef = useRef(null);
+  const profileUserId = routeUserId || user?.id || "";
+  const isOwnProfile = Boolean(user?.id && profileUserId === user.id);
+
   const [profile, setProfile] = useState(null);
-  const [form, setForm] = useState({
-    full_name: "",
-    bio: "",
-    phone: "",
-    birthday: "",
-    location: "",
-    skills: "",
-  });
-  const [avatarFile, setAvatarFile] = useState(null);
-  const [avatarPreview, setAvatarPreview] = useState(null);
+  const [stats, setStats] = useState({ postsCount: 0, storiesCount: 0 });
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [albumUrls, setAlbumUrls] = useState([]);
+  const [viewerIndex, setViewerIndex] = useState(null);
+  const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [albumUploading, setAlbumUploading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
-  const readOnlyFields = useMemo(
-    () => ({
-      employee_id: profile?.employee_id || "N/A",
-      department: profile?.department || "N/A",
-      position: profile?.position || "N/A",
-      email: profile?.email || user?.email || "N/A",
-      role: profile?.role || "N/A",
-    }),
-    [profile, user?.email]
-  );
+  const displayName = profile?.full_name || profile?.email?.split("@")[0] || user?.name || "Team member";
+  const initials = getInitials(displayName);
+  const telegramUrl = getTelegramUrl(profile?.telegram_username);
+  const musicUrl = getYouTubeUrl(getProfileMusicValue(profile));
+  const activeViewerImage = viewerIndex !== null ? albumUrls[viewerIndex] : null;
 
   useEffect(() => {
+    let isMounted = true;
+
     async function load() {
-      if (!user?.id) {
+      if (!profileUserId) {
         setLoading(false);
         setError(null);
         setProfile(null);
         return;
       }
+
       setLoading(true);
       setError(null);
+      setSuccess(null);
+      setEditing(false);
+
       try {
-        const profileData = await getProfile();
-        setProfile(profileData);
-        setForm({
-          full_name: profileData?.full_name || user?.name || "",
-          bio: profileData?.bio || "",
-          phone: profileData?.phone || "",
-          birthday: profileData?.birthday || "",
-          location: profileData?.location || "",
-          skills: formatSkillsForDisplay(profileData?.skills),
-        });
-        setAvatarPreview(profileData?.avatar_url || null);
-      } catch (err) {
-        console.error("Profile Load Error:", err);
-        if (err?.message === "No profile found for the current user.") {
-          setError("No profile was found for this account yet. Please contact support.");
-        } else {
-          setError("Unable to load profile. Please try again.");
+        const [profileData, statsData] = await Promise.all([
+          isOwnProfile ? getProfile() : getProfileById(profileUserId),
+          getProfileStats(profileUserId),
+        ]);
+
+        if (!isMounted) {
+          return;
         }
+
+        if (!profileData) {
+          setProfile(null);
+          setStats({ postsCount: 0, storiesCount: 0 });
+          setForm(EMPTY_FORM);
+          setAlbumUrls([]);
+          setError("Unable to find this profile.");
+          return;
+        }
+
+        setProfile(profileData);
+        setStats(statsData);
+        setForm({
+          full_name: profileData.full_name || user?.name || "",
+          bio: profileData.bio || "",
+          hobby: profileData.hobby || "",
+          relationship_status: profileData.relationship_status || "",
+          phone: profileData.phone || "",
+          telegram_username: profileData.telegram_username || "",
+          birthday: profileData.birthday || "",
+          favorite_music: getProfileMusicValue(profileData),
+        });
+        setAlbumUrls(parseProfileAlbumUrls(profileData.profile_album_urls));
+      } catch (err) {
+        if (!isMounted) {
+          return;
+        }
+
+        console.error("Profile Load Error:", err);
+        setProfile(null);
+        setError("Unable to load profile. Please try again.");
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
 
     load();
-  }, [user]);
 
-  useEffect(() => {
-    if (!avatarFile) return;
-    const objectUrl = URL.createObjectURL(avatarFile);
-    setAvatarPreview(objectUrl);
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [avatarFile]);
+    return () => {
+      isMounted = false;
+    };
+  }, [isOwnProfile, profileUserId, user?.name]);
 
   const handleChange = (field) => (event) => {
     setForm((current) => ({
@@ -89,33 +127,48 @@ function ProfilePage() {
     }));
   };
 
-  const handleAvatarChange = (event) => {
-    const file = event.target.files?.[0] || null;
-    if (file) {
-      setAvatarFile(file);
-    }
-  };
+  const buildProfileUpdates = (overrides = {}) => ({
+    avatar_url: profile?.avatar_url || null,
+    full_name: form.full_name.trim(),
+    bio: form.bio.trim(),
+    hobby: form.hobby.trim(),
+    relationship_status: form.relationship_status || null,
+    zodiac_sign: profile?.zodiac_sign || null,
+    phone: form.phone.trim(),
+    telegram_username: normalizeTelegramUsername(form.telegram_username),
+    birthday: form.birthday ? form.birthday : null,
+    favorite_music: form.favorite_music.trim(),
+    location: profile?.location || "",
+    skills: profile?.skills || "",
+    profile_album_urls: albumUrls,
+    ...overrides,
+  });
 
   const handleSave = async () => {
-    if (!user?.id) return;
+    if (!isOwnProfile || !user?.id) {
+      return;
+    }
+
     setSaving(true);
     setError(null);
     setSuccess(null);
 
     try {
-      const updates = {
-        full_name: form.full_name,
-        bio: form.bio,
-        phone: form.phone,
-        birthday: form.birthday ? form.birthday : null,
-        location: form.location,
-        skills: form.skills,
-      };
+      const validationMessage = validateProfileForm(form);
 
-      const savedProfile = await saveProfile(user.id, updates, avatarFile);
+      if (validationMessage) {
+        setError(validationMessage);
+        setSaving(false);
+        return;
+      }
+
+      const savedProfile = await saveProfile(user.id, buildProfileUpdates());
+      const nextStats = await getProfileStats(user.id);
+
       setProfile(savedProfile);
-      setAvatarFile(null);
-      setAvatarPreview(savedProfile?.avatar_url || null);
+      setStats(nextStats);
+      setAlbumUrls(parseProfileAlbumUrls(savedProfile.profile_album_urls));
+      setEditing(false);
       await refreshUserProfile(savedProfile);
       setSuccess("Profile saved successfully.");
     } catch (err) {
@@ -123,6 +176,53 @@ function ProfilePage() {
       setError("Unable to save profile. Please try again.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleOpenAlbumPicker = () => {
+    if (!isOwnProfile || albumUploading || albumUrls.length >= 6) {
+      return;
+    }
+
+    albumInputRef.current?.click();
+  };
+
+  const handleAlbumFileChange = async (event) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0] || null;
+
+    if (!file || !isOwnProfile || !user?.id) {
+      return;
+    }
+
+    if (albumUrls.length >= 6) {
+      setError("Profile Album can contain up to 6 images.");
+      input.value = "";
+      return;
+    }
+
+    setAlbumUploading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const imageUrl = await uploadProfileAlbumImage(user.id, file);
+      const nextAlbumUrls = [...albumUrls, imageUrl].filter(Boolean).slice(0, 6);
+      const savedProfile = await saveProfile(
+        user.id,
+        buildProfileUpdates({ profile_album_urls: nextAlbumUrls })
+      );
+
+      setProfile(savedProfile);
+      setAlbumUrls(parseProfileAlbumUrls(savedProfile.profile_album_urls));
+      await refreshUserProfile(savedProfile);
+      setSuccess("Photo added to Profile Album.");
+    } catch (err) {
+      console.error("Profile Album Upload Error:", err);
+      setError("Unable to add photo. Please try again.");
+    } finally {
+      input.value = "";
+      setAlbumUploading(false);
     }
   };
 
@@ -139,203 +239,471 @@ function ProfilePage() {
   }
 
   return (
-    <div className="space-y-8">
-      <section
-        className={`rounded-2xl border p-6 ${
-          isDark ? "border-slate-800 bg-slate-900 shadow-xl" : "border-slate-200 bg-white shadow-sm"
-        }`}
-      >
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-[0.28em] text-slate-500">Profile</p>
-            <h2 className={`mt-2 text-2xl font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
-              Your profile
-            </h2>
-            <p className={`mt-2 max-w-2xl text-sm leading-6 ${isDark ? "text-slate-400" : "text-slate-600"}`}>
-              Update your public avatar, bio, skills, and contact details. Read-only fields
-              are managed by HR and cannot be changed here.
-            </p>
-          </div>
-          <div
-            className={`rounded-full px-4 py-3 text-sm font-medium ${
-              isDark ? "bg-slate-950 text-slate-300" : "bg-[#f6e8ff] text-[#c446ff]"
+    <div className="space-y-6">
+      {error ? (
+        <div className={`rounded-2xl border p-4 text-sm ${isDark ? "border-rose-900 bg-rose-950/40 text-rose-200" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
+          {error}
+        </div>
+      ) : null}
+
+      {success ? (
+        <div className={`rounded-2xl border p-4 text-sm ${isDark ? "border-emerald-900 bg-emerald-950/40 text-emerald-200" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+          {success}
+        </div>
+      ) : null}
+
+      {profile ? (
+        <>
+          <section
+            className={`rounded-2xl border p-6 ${
+              isDark ? "border-slate-800 bg-slate-900 shadow-xl" : "border-slate-200 bg-white shadow-sm"
             }`}
           >
-            Employee ID: {readOnlyFields.employee_id}
-          </div>
-        </div>
-      </section>
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex min-w-0 flex-col gap-5 sm:flex-row sm:items-center">
+                <div
+                  className={`h-28 w-28 shrink-0 overflow-hidden rounded-full border ${
+                    isDark ? "border-slate-700 bg-slate-800" : "border-slate-200 bg-slate-100"
+                  }`}
+                >
+                  {profile.avatar_url ? (
+                    <img src={profile.avatar_url} alt={displayName} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-3xl font-semibold text-slate-500">
+                      {initials}
+                    </div>
+                  )}
+                </div>
 
-      <section className="grid gap-6 xl:grid-cols-[360px_1fr]">
-        <div
-          className={`rounded-2xl border p-6 ${
-            isDark ? "border-slate-800 bg-slate-900 shadow-xl" : "border-slate-200 bg-white shadow-sm"
-          }`}
-        >
-          <div className="flex flex-col items-center text-center">
-            <div
-              className={`relative h-28 w-28 overflow-hidden rounded-full border ${
-                isDark ? "border-slate-700 bg-slate-800" : "border-slate-200 bg-slate-100"
+                <div className="min-w-0">
+                  <h2 className={`truncate text-3xl font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
+                    {displayName}
+                  </h2>
+                  {profile.relationship_status ? (
+                    <span
+                      className={`mt-3 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                        isDark ? "bg-slate-800 text-sky-200" : "bg-[#f6e8ff] text-[#c446ff]"
+                      }`}
+                    >
+                      {profile.relationship_status}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 sm:min-w-[240px]">
+                <StatCard label="Posts" value={stats.postsCount} />
+                <StatCard label="Stories" value={stats.storiesCount} />
+              </div>
+            </div>
+
+            {isOwnProfile ? (
+              <div className="mt-6 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setEditing((current) => !current)}
+                  className={`inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition ${
+                    isDark
+                      ? "bg-sky-500 text-slate-950 hover:bg-sky-400"
+                      : "bg-[#c446ff] text-white hover:bg-[#ad32e3]"
+                  }`}
+                >
+                  {editing ? "View Profile" : "Edit Profile"}
+                </button>
+              </div>
+            ) : null}
+          </section>
+
+          {musicUrl ? (
+            <section
+              className={`rounded-2xl border p-6 ${
+                isDark ? "border-slate-800 bg-slate-900 shadow-xl" : "border-slate-200 bg-white shadow-sm"
               }`}
             >
-              {avatarPreview ? (
-                <img
-                  src={avatarPreview}
-                  alt="Avatar preview"
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-4xl text-slate-500">
-                  {form.full_name?.charAt(0) || user?.name?.charAt(0) || "U"}
-                </div>
-              )}
-            </div>
-            <p className={`mt-4 text-lg font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
-              {form.full_name || user?.name}
-            </p>
-            <p className={`mt-2 text-sm ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-              {readOnlyFields.department}
-            </p>
-          </div>
+              <div className="flex justify-center">
+                <a
+                  href={musicUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={`inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-semibold shadow-sm transition ${
+                    isDark
+                      ? "bg-gradient-to-r from-cyan-300 via-sky-400 to-indigo-500 text-slate-950 hover:opacity-90"
+                      : "bg-gradient-to-r from-[#c446ff] to-[#8f26c7] text-white hover:opacity-90"
+                  }`}
+                >
+                  🎵 Now Listening
+                </a>
+              </div>
+            </section>
+          ) : null}
 
-          <div className="mt-8 space-y-4">
-            <label className={`block text-sm font-medium ${isDark ? "text-slate-300" : "text-slate-700"}`}>
-              Upload avatar
-            </label>
+          <section
+            className={`rounded-2xl border p-6 ${
+              isDark ? "border-slate-800 bg-slate-900 shadow-xl" : "border-slate-200 bg-white shadow-sm"
+            }`}
+          >
+            <div className="space-y-4">
+              <InfoLine icon={getZodiacIcon(profile.zodiac_sign)} text={profile.zodiac_sign || "N/A"} />
+              <InfoLine icon="📱" text={profile.phone || "N/A"} />
+              <InfoLine icon="🎂" text={formatBirthday(profile.birthday)} />
+              <InfoLine icon="✈" text={profile.telegram_username || "N/A"} href={telegramUrl} />
+              <InfoLine icon="🎯" text={profile.hobby || "N/A"} />
+            </div>
+          </section>
+
+          <section
+            className={`rounded-2xl border p-6 text-center ${
+              isDark ? "border-slate-800 bg-slate-900 shadow-xl" : "border-slate-200 bg-white shadow-sm"
+            }`}
+          >
+            <h3 className={`text-lg font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>Bio</h3>
+            <p className={`mx-auto mt-3 max-w-2xl whitespace-pre-wrap text-sm leading-6 ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+              {profile.bio || "N/A"}
+            </p>
+          </section>
+
+          <section
+            className={`rounded-2xl border p-6 ${
+              isDark ? "border-slate-800 bg-slate-900 shadow-xl" : "border-slate-200 bg-white shadow-sm"
+            }`}
+          >
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, index) => {
+                const imageUrl = albumUrls[index];
+                const isFirstEmptySlot = index === albumUrls.length;
+
+                if (imageUrl) {
+                  return (
+                    <button
+                      type="button"
+                      key={imageUrl}
+                      onClick={() => setViewerIndex(index)}
+                      className="aspect-square overflow-hidden rounded-2xl border border-slate-200 bg-slate-100"
+                    >
+                      <img src={imageUrl} alt={`Profile album ${index + 1}`} className="h-full w-full object-cover" />
+                    </button>
+                  );
+                }
+
+                if (isOwnProfile && isFirstEmptySlot) {
+                  return (
+                    <button
+                      type="button"
+                      key={`album-empty-${index}`}
+                      onClick={handleOpenAlbumPicker}
+                      disabled={albumUploading}
+                      className={`aspect-square rounded-2xl border border-dashed text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 ${
+                        isDark
+                          ? "border-slate-700 bg-slate-950 text-slate-300 hover:bg-slate-800"
+                          : "border-slate-300 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                      }`}
+                    >
+                      {albumUploading ? "Adding..." : "+ Add Photo"}
+                    </button>
+                  );
+                }
+
+                return (
+                  <div
+                    key={`album-placeholder-${index}`}
+                    className={`aspect-square rounded-2xl border border-dashed ${
+                      isDark ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-slate-50"
+                    }`}
+                  />
+                );
+              })}
+            </div>
+
             <input
+              ref={albumInputRef}
               type="file"
               accept="image/*"
-              onChange={handleAvatarChange}
-              className={`w-full rounded-2xl border px-4 py-3 text-sm file:rounded-full file:border-0 file:px-4 file:py-2 ${
-                isDark
-                  ? "border-slate-700 bg-slate-950 text-slate-200 file:bg-slate-800 file:text-slate-100"
-                  : "border-slate-300 bg-slate-50 text-slate-700 file:bg-slate-200 file:text-slate-700"
-              }`}
+              className="hidden"
+              onChange={handleAlbumFileChange}
             />
-            <p className="text-xs text-slate-500">
-              Supported formats: JPG, PNG, GIF. Avatar will be stored in Supabase
-              Storage and served publicly.
-            </p>
-          </div>
-        </div>
+          </section>
 
-        <div
-          className={`min-w-0 rounded-2xl border p-6 ${
-            isDark ? "border-slate-800 bg-slate-900 shadow-xl" : "border-slate-200 bg-white shadow-sm"
-          }`}
-        >
-          {error && (
-            <div className="mb-6 rounded-2xl border border-rose-300 bg-rose-50 p-4 text-sm text-rose-700">
-              {error}
-            </div>
-          )}
-          {success && (
-            <div className="mb-6 rounded-2xl border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-700">
-              {success}
-            </div>
-          )}
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field
-              label="Full Name"
-              value={form.full_name}
-              onChange={handleChange("full_name")}
-            />
-            <Field
-              label="Phone"
-              value={form.phone}
-              onChange={handleChange("phone")}
-            />
-          </div>
-
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <Field
-              label="Birthday"
-              type="date"
-              value={form.birthday}
-              onChange={handleChange("birthday")}
-            />
-            <Field
-              label="Location"
-              value={form.location}
-              onChange={handleChange("location")}
-            />
-          </div>
-
-          <div className="mt-4">
-            <label className={`mb-2 block text-sm font-medium ${isDark ? "text-slate-300" : "text-slate-700"}`}>
-              Bio
-            </label>
-            <textarea
-              value={form.bio}
-              onChange={handleChange("bio")}
-              rows={4}
-              className={`w-full rounded-2xl border p-4 text-sm outline-none transition ${
-                isDark
-                  ? "border-slate-700 bg-slate-950 text-slate-200 focus:border-sky-500"
-                  : "border-slate-300 bg-slate-50 text-slate-800 focus:border-[#c446ff] focus:bg-white"
-              }`}
-            />
-          </div>
-
-          <div className="mt-4">
-            <label className={`mb-2 block text-sm font-medium ${isDark ? "text-slate-300" : "text-slate-700"}`}>
-              Skills
-            </label>
-            <input
-              type="text"
-              value={form.skills}
-              onChange={handleChange("skills")}
-              placeholder="e.g. Design, Product, Marketing"
-              className={`w-full rounded-2xl border px-4 py-3 text-sm outline-none transition ${
-                isDark
-                  ? "border-slate-700 bg-slate-950 text-slate-200 focus:border-sky-500"
-                  : "border-slate-300 bg-slate-50 text-slate-800 focus:border-[#c446ff] focus:bg-white"
-              }`}
-            />
-            <p className="mt-2 text-xs text-slate-500">
-              Separate skills with commas.
-            </p>
-          </div>
-
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            <ReadOnlyField label="Email" value={readOnlyFields.email} />
-            <ReadOnlyField label="Role" value={readOnlyFields.role} />
-          </div>
-
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <ReadOnlyField label="Department" value={readOnlyFields.department} />
-            <ReadOnlyField label="Position" value={readOnlyFields.position} />
-          </div>
-
-          <div className="mt-4">
-            <ReadOnlyField label="Employee ID" value={readOnlyFields.employee_id} />
-          </div>
-
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className={`text-sm ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-              {saving ? "Saving changes..." : "Remember to save your updates."}
-            </div>
-            <button
-              type="button"
-              disabled={saving}
-              onClick={handleSave}
-              className={`inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 ${
-                isDark
-                  ? "bg-sky-500 text-slate-950 hover:bg-sky-400"
-                  : "bg-[#c446ff] text-white hover:bg-[#ad32e3]"
+          {isOwnProfile && editing ? (
+            <section
+              className={`rounded-2xl border p-6 ${
+                isDark ? "border-slate-800 bg-slate-900 shadow-xl" : "border-slate-200 bg-white shadow-sm"
               }`}
             >
-              {saving ? "Saving..." : "Save profile"}
-            </button>
-          </div>
-        </div>
-      </section>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Full Name" value={form.full_name} onChange={handleChange("full_name")} required />
+                <SelectField
+                  label="Relationship Status"
+                  value={form.relationship_status}
+                  onChange={handleChange("relationship_status")}
+                  options={RELATIONSHIP_OPTIONS}
+                />
+                <Field label="Phone" value={form.phone} onChange={handleChange("phone")} />
+                <Field label="Birthday" type="date" value={form.birthday} onChange={handleChange("birthday")} />
+                <Field label="Telegram Username" value={form.telegram_username} onChange={handleChange("telegram_username")} />
+                <Field label="Hobby" value={form.hobby} onChange={handleChange("hobby")} maxLength={100} />
+                <Field label="Now Listening (YouTube Link)" value={form.favorite_music} onChange={handleChange("favorite_music")} />
+              </div>
+
+              <div className="mt-4">
+                <label className={`mb-2 block text-sm font-medium ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                  Bio
+                </label>
+                <textarea
+                  value={form.bio}
+                  onChange={handleChange("bio")}
+                  maxLength={300}
+                  rows={4}
+                  className={`w-full rounded-2xl border p-4 text-sm outline-none transition ${
+                    isDark
+                      ? "border-slate-700 bg-slate-950 text-slate-200 focus:border-sky-500"
+                      : "border-slate-300 bg-slate-50 text-slate-800 focus:border-[#c446ff] focus:bg-white"
+                  }`}
+                />
+                <p className="mt-2 text-xs text-slate-500">{form.bio.length}/300 characters</p>
+              </div>
+
+              <div className="mt-6 flex justify-end">
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={handleSave}
+                  className={`inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 ${
+                    isDark
+                      ? "bg-sky-500 text-slate-950 hover:bg-sky-400"
+                      : "bg-[#c446ff] text-white hover:bg-[#ad32e3]"
+                  }`}
+                >
+                  {saving ? "Saving..." : "Save profile"}
+                </button>
+              </div>
+            </section>
+          ) : null}
+
+          {activeViewerImage ? (
+            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/95 p-4">
+              <button
+                type="button"
+                aria-label="Close album viewer"
+                onClick={() => setViewerIndex(null)}
+                className="absolute right-4 top-4 rounded-full border border-white/40 bg-black/40 px-4 py-2 text-sm font-semibold text-white"
+              >
+                Close
+              </button>
+              <img src={activeViewerImage} alt="Profile album fullscreen" className="max-h-full max-w-full rounded-2xl object-contain" />
+            </div>
+          ) : null}
+        </>
+      ) : null}
     </div>
   );
 }
 
-function Field({ label, value, onChange, type = "text" }) {
+function getInitials(name) {
+  const parts = name
+    ?.split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2) || [];
+
+  return parts.map((part) => part.charAt(0).toUpperCase()).join("") || "U";
+}
+
+function formatBirthday(value) {
+  if (!value) {
+    return "N/A";
+  }
+
+  return new Date(value).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function normalizeTelegramUsername(value) {
+  return value
+    .trim()
+    .replace(/^https?:\/\/(t\.me|telegram\.me)\//i, "")
+    .replace(/^@/, "");
+}
+
+function getTelegramUrl(value) {
+  const username = normalizeTelegramUsername(value || "");
+  return username ? `https://t.me/${username}` : "";
+}
+
+function getProfileMusicValue(profile) {
+  const value = profile?.favorite_music;
+
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  return value ? String(value).trim() : "";
+}
+
+function getYouTubeUrl(value) {
+  const trimmed = value?.trim();
+
+  if (!trimmed) {
+    return "";
+  }
+
+  const candidates = getYouTubeUrlCandidates(trimmed);
+
+  for (const candidateValue of candidates) {
+    const candidate = /^[a-z][a-z\d+.-]*:\/\//i.test(candidateValue) ? candidateValue : `https://${candidateValue}`;
+
+    try {
+      const url = new URL(candidate);
+      const host = url.hostname.replace(/^www\./, "").toLowerCase();
+      const isYouTubeHost =
+        host === "youtube.com" ||
+        host.endsWith(".youtube.com") ||
+        host === "youtu.be" ||
+        host.endsWith(".youtu.be");
+
+      if (isYouTubeHost) {
+        return url.toString();
+      }
+    } catch {
+      // Try the next candidate.
+    }
+  }
+
+  return "";
+}
+
+function getYouTubeUrlCandidates(value) {
+  const matches = value.match(/(?:https?:\/\/)?(?:[\w-]+\.)*(?:youtube\.com|youtu\.be)[^\s<>"')\]]*/gi) || [];
+  const candidates = [value, ...matches].map((candidate) => candidate.replace(/[),.;]+$/, ""));
+
+  return [...new Set(candidates)];
+}
+
+function getZodiacIcon(value) {
+  const zodiacIcons = {
+    Aries: "♈",
+    Taurus: "♉",
+    Gemini: "♊",
+    Cancer: "♋",
+    Leo: "♌",
+    Virgo: "♍",
+    Libra: "♎",
+    Scorpio: "♏",
+    Sagittarius: "♐",
+    Capricorn: "♑",
+    Aquarius: "♒",
+    Pisces: "♓",
+  };
+
+  return zodiacIcons[value] || "☆";
+}
+
+function validateProfileForm(form) {
+  if (!form.full_name.trim()) {
+    return "Full Name is required.";
+  }
+
+  if (form.bio.length > 300) {
+    return "Bio must be 300 characters or fewer.";
+  }
+
+  if (form.hobby.length > 100) {
+    return "Hobby must be 100 characters or fewer.";
+  }
+
+  if (form.relationship_status && !RELATIONSHIP_OPTIONS.includes(form.relationship_status)) {
+    return "Choose a valid relationship status.";
+  }
+
+  if (form.favorite_music.trim() && !getYouTubeUrl(form.favorite_music)) {
+    return "Now Listening must be a valid YouTube URL.";
+  }
+
+  return "";
+}
+
+function StatCard({ label, value }) {
+  const { isDark } = useTheme();
+
+  return (
+    <div
+      className={`rounded-2xl border p-4 text-center ${
+        isDark ? "border-slate-800 bg-slate-950 text-slate-100" : "border-slate-200 bg-slate-50 text-slate-900"
+      }`}
+    >
+      <p className="text-3xl font-semibold">{value}</p>
+      <p className="mt-2 text-sm text-slate-500">{label}</p>
+    </div>
+  );
+}
+
+function InfoLine({ icon, text, href = "" }) {
+  const { isDark } = useTheme();
+  const content = (
+    <>
+      <span className="w-6 shrink-0 text-center text-base">{icon}</span>
+      <span className="min-w-0 flex-1 break-words text-sm font-medium">{text}</span>
+    </>
+  );
+
+  if (href) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className={`flex items-center gap-2 rounded-2xl px-1 py-2 transition ${
+          isDark
+            ? "text-sky-200 hover:bg-slate-800/70"
+            : "text-[#c446ff] hover:bg-slate-100"
+        }`}
+      >
+        {content}
+      </a>
+    );
+  }
+
+  return (
+    <div
+      className={`flex items-center gap-2 rounded-2xl px-1 py-2 ${
+        isDark
+          ? "text-slate-200"
+          : "text-slate-700"
+      }`}
+    >
+      {content}
+    </div>
+  );
+}
+
+function SelectField({ label, value, onChange, options }) {
+  const { isDark } = useTheme();
+
+  return (
+    <label className={`block text-sm font-medium ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+      <span>{label}</span>
+      <select
+        value={value}
+        onChange={onChange}
+        className={`mt-2 w-full rounded-2xl border px-4 py-3 text-sm outline-none transition ${
+          isDark
+            ? "border-slate-700 bg-slate-950 text-slate-200 focus:border-sky-500"
+            : "border-slate-300 bg-slate-50 text-slate-800 focus:border-[#c446ff] focus:bg-white"
+        }`}
+      >
+        <option value="">Not specified</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function Field({ label, value, onChange, type = "text", required = false, maxLength }) {
   const { isDark } = useTheme();
 
   return (
@@ -345,6 +713,8 @@ function Field({ label, value, onChange, type = "text" }) {
         type={type}
         value={value}
         onChange={onChange}
+        required={required}
+        maxLength={maxLength}
         className={`mt-2 w-full rounded-2xl border px-4 py-3 text-sm outline-none transition ${
           isDark
             ? "border-slate-700 bg-slate-950 text-slate-200 focus:border-sky-500"
@@ -352,25 +722,6 @@ function Field({ label, value, onChange, type = "text" }) {
         }`}
       />
     </label>
-  );
-}
-
-function ReadOnlyField({ label, value }) {
-  const { isDark } = useTheme();
-
-  return (
-    <div
-      className={`rounded-2xl border p-4 ${
-        isDark
-          ? "border-slate-800 bg-slate-950 text-slate-200"
-          : "border-slate-200 bg-slate-50 text-slate-700"
-      }`}
-    >
-      <p className={`text-sm ${isDark ? "text-slate-400" : "text-slate-500"}`}>{label}</p>
-      <p className={`mt-2 break-all text-sm font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
-        {value || "-"}
-      </p>
-    </div>
   );
 }
 

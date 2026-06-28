@@ -1,16 +1,20 @@
 import { useEffect, useState, useCallback, useRef } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../context/auth_context";
 import * as postService from "../services/post_service";
 import * as storiesService from "../services/stories_service";
 import { getPinnedActiveAnnouncementsResult } from "../services/announcements_service";
 import { getFeatureFlags } from "../services/admin_configs_service";
 import FeedWidget from "../components/center_feed/feed_widget";
+import StoryViewer from "../components/story/story_viewer";
 import { useTheme } from "../context/theme_context";
+import { supabase } from "../lib/supabase";
 
 function HomePage() {
   const { user } = useAuth();
   const { isDark } = useTheme();
   const storyInputRef = useRef(null);
+  const storiesRequestRef = useRef(0);
 
   const [draft, setDraft] = useState("");
   const [posts, setPosts] = useState([]);
@@ -22,20 +26,33 @@ function HomePage() {
   const [storiesLoading, setStoriesLoading] = useState(false);
   const [storiesError, setStoriesError] = useState("");
   const [storyUploading, setStoryUploading] = useState(false);
+  const [storyViewerOpen, setStoryViewerOpen] = useState(false);
+  const [storyViewerIndex, setStoryViewerIndex] = useState(0);
 
   const loadStories = useCallback(async () => {
+    const requestId = storiesRequestRef.current + 1;
+    storiesRequestRef.current = requestId;
+
     setStoriesLoading(true);
     setStoriesError("");
 
     try {
       const formatted = await storiesService.getStories();
+      if (storiesRequestRef.current !== requestId) {
+        return;
+      }
       setStories(formatted);
     } catch (err) {
+      if (storiesRequestRef.current !== requestId) {
+        return;
+      }
       console.error("Load Stories Error:", err);
       setStories([]);
       setStoriesError("Unable to load stories.");
     } finally {
-      setStoriesLoading(false);
+      if (storiesRequestRef.current === requestId) {
+        setStoriesLoading(false);
+      }
     }
   }, []);
 
@@ -58,7 +75,6 @@ function HomePage() {
   const loadPosts = useCallback(async () => {
     try {
       const formatted = await postService.getPosts();
-      console.log("Posts Loaded:", formatted);
       setPosts(formatted);
     } catch (err) {
       console.error("Load Posts Error:", err);
@@ -95,20 +111,83 @@ function HomePage() {
     loadAnnouncements();
     loadStories();
 
-    const unsubscribe = postService.subscribeToPosts((payload) => {
-      console.log("🔥 Realtime Payload:", payload);
+    const unsubscribe = postService.subscribeToPosts(() => {
       loadPosts();
     });
 
-    const unsubscribeStories = storiesService.subscribeToStories(() => {
-      loadStories();
+    const unsubscribeStories = storiesService.subscribeToStories((payload) => {
+      if (!payload?.new?.id) {
+        return;
+      }
+
+      if (payload.eventType === "INSERT" && payload.new.user_id === user?.id) {
+        return;
+      }
+
+      setStories((prevStories) => {
+        const existingIndex = prevStories.findIndex((story) => story.id === payload.new.id);
+
+        if (payload.eventType === "INSERT" && existingIndex !== -1) {
+          return prevStories;
+        }
+
+        const nextStory = {
+          id: payload.new.id,
+          user_id: payload.new.user_id || null,
+          author_name: payload.new.author_name || payload.new.profile?.full_name || payload.new.user_id || "",
+          author_avatar: payload.new.author_avatar || payload.new.profile?.avatar_url || null,
+          profile: payload.new.profile
+            ? {
+                id: payload.new.profile.id || payload.new.user_id || null,
+                full_name: payload.new.profile.full_name || payload.new.author_name || "",
+                avatar_url: payload.new.profile.avatar_url || null,
+              }
+            : null,
+          image_url: payload.new.image_url || payload.new.media_url || null,
+          content: payload.new.content || payload.new.caption || "",
+          created_at: payload.new.created_at || new Date().toISOString(),
+          created_at_label: payload.new.created_at
+            ? new Date(payload.new.created_at).toLocaleString()
+            : new Date().toLocaleString(),
+          expires_at: payload.new.expires_at || null,
+          updated_at: payload.new.updated_at || payload.new.created_at || new Date().toISOString(),
+        };
+
+        if (existingIndex !== -1) {
+          const updatedStories = [...prevStories];
+          updatedStories[existingIndex] = nextStory;
+          return updatedStories.sort(
+            (leftStory, rightStory) => new Date(rightStory.created_at).getTime() - new Date(leftStory.created_at).getTime()
+          );
+        }
+
+        return [nextStory, ...prevStories].sort(
+          (leftStory, rightStory) => new Date(rightStory.created_at).getTime() - new Date(leftStory.created_at).getTime()
+        );
+      });
     });
+
+    const commentsChannel = supabase
+      .channel("comments-post-counts")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "comments",
+        },
+        () => {
+          loadPosts();
+        }
+      )
+      .subscribe();
 
     return () => {
       if (typeof unsubscribe === "function") unsubscribe();
       if (typeof unsubscribeStories === "function") unsubscribeStories();
+      supabase.removeChannel(commentsChannel);
     };
-  }, [loadAnnouncements, loadPosts, loadStories]);
+  }, [loadAnnouncements, loadPosts, loadStories, user?.id]);
 
   const handleOpenStoryPicker = () => {
     storyInputRef.current?.click();
@@ -150,6 +229,15 @@ function HomePage() {
     }
   };
 
+  const handleOpenStoryViewer = (index) => {
+    setStoryViewerIndex(index);
+    setStoryViewerOpen(true);
+  };
+
+  const handleCloseStoryViewer = () => {
+    setStoryViewerOpen(false);
+  };
+
   const handlePublish = async (content, isAnonymous = false) => {
     const trimmedContent = content?.trim();
     if (!trimmedContent) return false;
@@ -174,6 +262,25 @@ function HomePage() {
     await loadPosts();
     return true;
   };
+
+  const handlePostCommentCreated = useCallback((postId) => {
+    if (!postId) {
+      return;
+    }
+
+    setPosts((prevPosts) =>
+      prevPosts.map((post) => {
+        if (post.id !== postId) {
+          return post;
+        }
+
+        return {
+          ...post,
+          comments_count: Number(post.comments_count || 0) + 1,
+        };
+      })
+    );
+  }, []);
 
   return (
     <div className="flex h-full min-h-[calc(100vh-64px)] flex-col">
@@ -239,15 +346,19 @@ function HomePage() {
             </div>
           </button>
 
-          {stories.map((story) => {
-            const initials = story.author_name
-              ? story.author_name
+          {stories.map((story, index) => {
+            const fullName = story.profile?.full_name || story.author_name || "";
+            const avatarUrl = story.profile?.avatar_url ?? story.author_avatar ?? null;
+            const initials = fullName
+              ? fullName
                   .split(/\s+/)
                   .filter(Boolean)
                   .slice(0, 2)
                   .map((part) => part[0]?.toUpperCase())
                   .join("")
-              : "U";
+              : "";
+
+            const profilePath = story.user_id ? `/profile/${story.user_id}` : null;
 
             return (
               <article
@@ -257,10 +368,28 @@ function HomePage() {
                 }`}
               >
                 <div className="flex items-center gap-3 px-4 pt-4">
-                  {story.author_avatar ? (
+                  {profilePath ? (
+                    <Link to={profilePath} aria-label={`Open ${fullName || "user"} profile`} className="shrink-0">
+                      {avatarUrl ? (
+                        <img
+                          src={avatarUrl}
+                          alt={fullName || "Story avatar"}
+                          className="h-10 w-10 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div
+                          className={`flex h-10 w-10 items-center justify-center rounded-full text-xs font-semibold ${
+                            isDark ? "bg-slate-800 text-slate-100" : "bg-slate-100 text-slate-700"
+                          }`}
+                        >
+                          {initials || "U"}
+                        </div>
+                      )}
+                    </Link>
+                  ) : avatarUrl ? (
                     <img
-                      src={story.author_avatar}
-                      alt={story.author_name}
+                      src={avatarUrl}
+                      alt={fullName || "Story avatar"}
                       className="h-10 w-10 rounded-full object-cover"
                     />
                   ) : (
@@ -274,19 +403,34 @@ function HomePage() {
                   )}
 
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">{story.author_name}</p>
+                    {profilePath ? (
+                      <Link
+                        to={profilePath}
+                        className={`block truncate text-sm font-semibold transition ${
+                          isDark ? "hover:text-sky-300" : "hover:text-[#c446ff]"
+                        }`}
+                      >
+                        {fullName}
+                      </Link>
+                    ) : (
+                      <p className="truncate text-sm font-semibold">{fullName}</p>
+                    )}
                     <p className={`text-[11px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
                       {story.created_at_label}
                     </p>
                   </div>
                 </div>
 
-                <div className="px-4 pb-4 pt-3">
+                <button
+                  type="button"
+                  onClick={() => handleOpenStoryViewer(index)}
+                  className="block px-4 pb-4 pt-3 text-left"
+                >
                   <div className="overflow-hidden rounded-2xl">
                     {story.image_url ? (
                       <img
                         src={story.image_url}
-                        alt={`${story.author_name}'s story`}
+                        alt={`${fullName || "Story"}'s story`}
                         className="h-40 w-full object-cover"
                       />
                     ) : (
@@ -299,7 +443,7 @@ function HomePage() {
                       </div>
                     )}
                   </div>
-                </div>
+                </button>
               </article>
             );
           })}
@@ -319,10 +463,18 @@ function HomePage() {
         draft={draft}
         onDraftChange={setDraft}
         onPublish={handlePublish}
+        onCommentCreated={handlePostCommentCreated}
         announcements={announcementsEnabled ? announcements : []}
         announcementsLoading={announcementsEnabled ? announcementsLoading : false}
         announcementsError={announcementsEnabled ? announcementsError : ""}
         onRetryAnnouncements={loadAnnouncements}
+      />
+
+      <StoryViewer
+        isOpen={storyViewerOpen}
+        stories={stories}
+        initialIndex={storyViewerIndex}
+        onClose={handleCloseStoryViewer}
       />
     </div>
   );

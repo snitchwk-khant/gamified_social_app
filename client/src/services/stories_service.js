@@ -101,13 +101,18 @@ export async function getStories() {
   return storyRows.map((story) => {
     const profile = profilesById[story.user_id] || null;
     const emailPrefix = profile?.email?.split("@")[0] || "";
-    const authorName = profile?.full_name || emailPrefix || "User";
+    const authorName = profile?.full_name || emailPrefix || "";
 
     return {
       id: story.id,
       user_id: story.user_id,
       author_name: authorName,
       author_avatar: profile?.avatar_url || null,
+      profile: {
+        id: profile?.id || story.user_id,
+        full_name: profile?.full_name || authorName,
+        avatar_url: profile?.avatar_url || null,
+      },
       image_url: story.media_url || null,
       content: story.caption || "",
       created_at: story.created_at,
@@ -116,6 +121,42 @@ export async function getStories() {
       updated_at: story.updated_at,
     };
   });
+}
+
+function isActiveStory(story) {
+  return !story?.expires_at || new Date(story.expires_at).getTime() > Date.now();
+}
+
+export function countActiveStoriesByUserId(stories, userId) {
+  if (!userId || !Array.isArray(stories)) {
+    return 0;
+  }
+
+  return stories.filter((story) => story?.user_id === userId && isActiveStory(story)).length;
+}
+
+export async function getActiveStoryCountByUserId(userId, stories = null) {
+  if (!userId) {
+    return 0;
+  }
+
+  if (Array.isArray(stories)) {
+    return countActiveStoriesByUserId(stories, userId);
+  }
+
+  const now = new Date().toISOString();
+  const { count, error } = await supabase
+    .from("stories")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .or(`expires_at.is.null,expires_at.gt.${now}`);
+
+  if (error) {
+    console.error("getActiveStoryCountByUserId Error:", error);
+    return 0;
+  }
+
+  return count || 0;
 }
 
 export async function createStory({ image_url, content = "" }) {
@@ -181,6 +222,8 @@ export function subscribeToStories(onPayload) {
 
 export default {
   getStories,
+  countActiveStoriesByUserId,
+  getActiveStoryCountByUserId,
   uploadStoryImage,
   createStory,
   deleteStory,

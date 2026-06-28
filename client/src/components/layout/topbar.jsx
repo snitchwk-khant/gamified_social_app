@@ -2,8 +2,8 @@ import { useAuth } from "../../context/auth_context";
 import { useTheme } from "../../context/theme_context";
 
 function Topbar() {
-  const { user, signOut } = useAuth();
-  const { isDark, toggleTheme } = useTheme();
+  const { user } = useAuth();
+  const { isDark } = useTheme();
   const displayName = user?.full_name || user?.name || user?.email?.split("@")[0] || "Team member";
   const initials = user?.initials || displayName?.charAt(0)?.toUpperCase() || "T";
 
@@ -23,27 +23,6 @@ function Topbar() {
       </div>
 
       <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={toggleTheme}
-          className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
-            isDark
-              ? "border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
-              : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
-          }`}
-        >
-          {isDark ? "Light mode" : "Dark mode"}
-        </button>
-        <button
-          onClick={signOut}
-          className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
-            isDark
-              ? "border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
-              : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
-          }`}
-        >
-          Sign Out
-        </button>
         <div
           className={`flex items-center gap-2 rounded-full border px-3 py-2 text-sm ${
             isDark

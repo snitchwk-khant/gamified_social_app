@@ -12,7 +12,30 @@ export async function getPosts() {
   }
 
   const postRows = postsData || [];
+  const postIds = postRows.map((post) => post.id).filter(Boolean);
   const userIds = [...new Set(postRows.map((post) => post.user_id).filter(Boolean))];
+
+  let commentCountsByPostId = {};
+
+  if (postIds.length) {
+    const { data: commentRows, error: commentError } = await supabase
+      .from("comments")
+      .select("post_id")
+      .in("post_id", postIds);
+
+    if (commentError) {
+      console.error("getPosts Comment Counts Error:", commentError);
+    } else {
+      commentCountsByPostId = (commentRows || []).reduce((counts, comment) => {
+        if (!comment?.post_id) {
+          return counts;
+        }
+
+        counts[comment.post_id] = (counts[comment.post_id] || 0) + 1;
+        return counts;
+      }, {});
+    }
+  }
 
   let profilesById = {};
 
@@ -38,17 +61,22 @@ export async function getPosts() {
   const formatted = postRows.map((post) => {
     const profile = profilesById[post.user_id] || null;
     const emailPrefix = profile?.email?.split("@")[0] || "";
-    const authorName = profile?.full_name || emailPrefix || "User";
+    const authorName = profile?.full_name || emailPrefix || "";
 
     return {
       id: post.id,
-      title: "Team Update",
+      user_id: post.user_id,
       body: post.content,
       date: new Date(post.created_at).toLocaleString(),
-      comments_count: post.comments_count,
+      comments_count: commentCountsByPostId[post.id] ?? post.comments_count ?? 0,
       is_anonymous: Boolean(post.is_anonymous),
       author_name: authorName,
       author_avatar: profile?.avatar_url || null,
+      profile: {
+        id: profile?.id || post.user_id,
+        full_name: profile?.full_name || authorName,
+        avatar_url: profile?.avatar_url || null,
+      },
     };
   });
 
@@ -107,9 +135,7 @@ export function subscribeToPosts(onPayload) {
         if (typeof onPayload === "function") onPayload(payload);
       }
     )
-    .subscribe((status) => {
-      console.log("🟢 Realtime Status:", status);
-    });
+    .subscribe();
 
   return () => {
     supabase.removeChannel(channel);

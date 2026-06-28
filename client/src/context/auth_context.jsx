@@ -86,15 +86,10 @@ export function AuthProvider({ children }) {
       loading,
 
       signIn: async ({ email, password }) => {
-        console.log("Trying login:", email);
-
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
-
-        console.log("Supabase Data:", data);
-        console.log("Supabase Error:", error);
 
         if (error || !data?.session?.user) {
           throw new Error(error?.message || "Invalid email or password");

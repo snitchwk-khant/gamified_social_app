@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useTheme } from "../../context/theme_context";
 
 function formatRelativeTime(dateString) {
@@ -44,11 +45,13 @@ function CommentList({ comments, loading }) {
     <div className="space-y-4">
       {comments.map((comment) => {
         const isAnonymousComment = Boolean(comment.is_anonymous);
-        const fullName = isAnonymousComment
-          ? "Masked"
-          : comment.author_name || "User";
-        const avatarSrc = isAnonymousComment ? "/masked-avatar.jpg" : comment.author_avatar;
-        const initials = fullName.charAt(0).toUpperCase();
+        const profile = comment.profile || null;
+        const fullName = isAnonymousComment ? "Masked" : profile?.full_name || comment.author_name || "";
+        const avatarSrc = isAnonymousComment
+          ? "/masked-avatar.jpg"
+          : profile?.avatar_url ?? comment.author_avatar ?? null;
+        const initials = (fullName.charAt(0) || "").toUpperCase();
+        const profilePath = !isAnonymousComment && comment.user_id ? `/profile/${comment.user_id}` : null;
 
         return (
           <div
@@ -61,11 +64,31 @@ function CommentList({ comments, loading }) {
           >
             <div className="flex items-start gap-3">
               {avatarSrc ? (
-                <img
-                  src={avatarSrc}
-                  alt={fullName}
-                  className="h-10 w-10 rounded-full object-cover"
-                />
+                profilePath ? (
+                  <Link to={profilePath} aria-label={`Open ${fullName || "user"} profile`} className="shrink-0">
+                    <img
+                      src={avatarSrc}
+                      alt={fullName}
+                      className="h-10 w-10 rounded-full object-cover"
+                    />
+                  </Link>
+                ) : (
+                  <img
+                    src={avatarSrc}
+                    alt={fullName}
+                    className="h-10 w-10 rounded-full object-cover"
+                  />
+                )
+              ) : profilePath ? (
+                <Link
+                  to={profilePath}
+                  aria-label={`Open ${fullName || "user"} profile`}
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
+                    isDark ? "bg-slate-700 text-white" : "bg-slate-200 text-slate-700"
+                  }`}
+                >
+                  {initials}
+                </Link>
               ) : (
                 <div
                   className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold ${
@@ -78,7 +101,16 @@ function CommentList({ comments, loading }) {
 
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-                  <span className={`font-medium ${isDark ? "text-slate-300" : "text-slate-800"}`}>{fullName}</span>
+                  {profilePath ? (
+                    <Link
+                      to={profilePath}
+                      className={`font-medium transition ${isDark ? "text-slate-300 hover:text-sky-300" : "text-slate-800 hover:text-[#c446ff]"}`}
+                    >
+                      {fullName}
+                    </Link>
+                  ) : (
+                    <span className={`font-medium ${isDark ? "text-slate-300" : "text-slate-800"}`}>{fullName}</span>
+                  )}
                   <span>{formatRelativeTime(comment.created_at)}</span>
                 </div>
                 <p className={`mt-2 text-sm leading-6 ${isDark ? "text-slate-300" : "text-slate-700"}`}>

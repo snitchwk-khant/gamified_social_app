@@ -5,8 +5,8 @@ import { useAuth } from "../../context/auth_context";
 import { useTheme } from "../../context/theme_context";
 
 function LeftSidebar() {
-  const { user } = useAuth();
-  const { isDark } = useTheme();
+  const { user, signOut } = useAuth();
+  const { isDark, toggleTheme } = useTheme();
   const isAdmin = user?.role?.toString().trim().toLowerCase() === "admin";
 
   return (
@@ -23,11 +23,36 @@ function LeftSidebar() {
           <MenuItem to="/" icon="🏠" title="Home" />
           <MenuItem to="/notifications" icon="🔔" title="Notifications" />
           <MenuItem to="/profile" icon="👤" title="Profile" />
+          <SidebarAction
+            icon={isDark ? "☀️" : "🌙"}
+            title={isDark ? "Light mode" : "Dark mode"}
+            onClick={toggleTheme}
+          />
+          <SidebarAction icon="↩" title="Sign Out" onClick={signOut} />
           {isAdmin ? <MenuItem to="/admin" icon="🛡️" title="Admin" /> : null}
         </nav>
       </div>
       <UserCard />
     </div>
+  );
+}
+
+function SidebarAction({ icon, title, onClick }) {
+  const { isDark } = useTheme();
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex w-full items-center gap-4 rounded-2xl px-4 py-3 text-left text-sm font-medium transition-colors duration-200 ${
+        isDark
+          ? "text-slate-300 hover:bg-slate-900 hover:text-white"
+          : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+      }`}
+    >
+      <span className="text-xl">{icon}</span>
+      <span>{title}</span>
+    </button>
   );
 }
 

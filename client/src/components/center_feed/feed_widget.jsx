@@ -40,6 +40,7 @@ function FeedWidget({
   draft,
   onDraftChange,
   onPublish,
+  onCommentCreated,
   announcements = [],
   announcementsLoading = false,
   announcementsError = "",
@@ -131,7 +132,7 @@ function FeedWidget({
       ) : null}
 
       <PostForm value={draft} onChange={onDraftChange} onSubmit={onPublish} />
-      <FeedPanel posts={posts} />
+      <FeedPanel posts={posts} onCommentCreated={onCommentCreated} />
     </div>
   );
 }
