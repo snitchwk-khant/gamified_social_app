@@ -23,7 +23,7 @@ function HomePage() {
   const [announcementsLoading, setAnnouncementsLoading] = useState(false);
   const [announcementsError, setAnnouncementsError] = useState("");
   const [announcementsEnabled, setAnnouncementsEnabled] = useState(true);
-  const [storiesLoading, setStoriesLoading] = useState(false);
+  const [, setStoriesLoading] = useState(false);
   const [storiesError, setStoriesError] = useState("");
   const [storyUploading, setStoryUploading] = useState(false);
   const [storyViewerOpen, setStoryViewerOpen] = useState(false);
@@ -285,64 +285,34 @@ function HomePage() {
   return (
     <div className="flex h-full min-h-[calc(100vh-64px)] flex-col">
       <section
-        className={`mb-6 rounded-2xl border p-4 sm:p-5 ${
+        className={`mb-6 rounded-[1.5rem] border p-4 sm:p-5 ${
           isDark ? "border-slate-800 bg-slate-950/90" : "border-slate-200 bg-white"
         }`}
       >
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.32em] text-slate-500">Stories</p>
-            <h2 className={`mt-1 text-xl font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
-              My Day
-            </h2>
-          </div>
-          <div className={`text-right text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-            <p>{storiesLoading ? "Refreshing stories..." : `${stories.length} ${stories.length === 1 ? "story" : "stories"}`}</p>
-            <p className="mt-1">Tap a card to add yours</p>
-          </div>
-        </div>
-
         {storiesError ? (
-          <p className={`mt-3 text-sm ${isDark ? "text-rose-300" : "text-rose-700"}`}>{storiesError}</p>
+          <p className={`mb-3 text-sm ${isDark ? "text-rose-300" : "text-rose-700"}`}>{storiesError}</p>
         ) : null}
 
-        <div className="mt-4 flex gap-3 overflow-x-auto pb-1">
+        <div className="flex gap-5 overflow-x-auto pb-1">
           <button
             type="button"
             onClick={handleOpenStoryPicker}
             disabled={storyUploading}
-            className={`group relative flex w-[170px] shrink-0 flex-col overflow-hidden rounded-[1.75rem] border text-left transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70 ${
-              isDark
-                ? "border-dashed border-slate-700 bg-slate-900/80 text-slate-100 hover:border-slate-500"
-                : "border-dashed border-slate-300 bg-slate-50 text-slate-900 hover:border-slate-400"
-            }`}
+            className="group flex w-[230px] shrink-0 flex-col rounded-[1.625rem] border border-dashed border-slate-300 bg-white p-5 text-left transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            <div className="flex min-h-[220px] flex-1 flex-col justify-between p-4">
-              <div className="flex items-center justify-between">
+            <div className="flex min-h-[252px] flex-1 flex-col">
+              <div className="flex items-center gap-4">
                 <div
-                  className={`flex h-12 w-12 items-center justify-center rounded-full border text-lg font-semibold ${
-                    isDark ? "border-slate-700 bg-slate-950 text-slate-100" : "border-slate-300 bg-white text-slate-700"
-                  }`}
+                  className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-slate-300 bg-white text-[30px] font-light leading-none text-slate-900"
                 >
-                  {storyUploading ? "..." : "+"}
+                  +
                 </div>
-                <span className={`text-[10px] uppercase tracking-[0.24em] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                  {storyUploading ? "Uploading" : "My Story"}
+                <span className="text-xs font-medium uppercase tracking-[0.42em] text-[#c446ff]">
+                  MY STORY
                 </span>
               </div>
 
-              <div className="space-y-2">
-                <p className="text-sm font-semibold">Share a moment</p>
-                <p className={`text-xs leading-5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                  Pick an image and add it to the top of the feed.
-                </p>
-              </div>
-
-              <div
-                className={`h-28 rounded-2xl border border-dashed ${
-                  isDark ? "border-slate-700 bg-slate-950/70" : "border-slate-300 bg-white"
-                }`}
-              />
+              <div className="mt-5 aspect-square w-full rounded-[18px] border border-dashed border-slate-300 bg-white" />
             </div>
           </button>
 
@@ -363,24 +333,20 @@ function HomePage() {
             return (
               <article
                 key={story.id}
-                className={`flex w-[170px] shrink-0 flex-col overflow-hidden rounded-[1.75rem] border ${
-                  isDark ? "border-slate-800 bg-slate-900 text-slate-100" : "border-slate-200 bg-white text-slate-900"
-                }`}
+                className="flex w-[230px] shrink-0 flex-col rounded-[1.5rem] border border-slate-200 bg-white p-5 text-slate-900 shadow-[0_14px_30px_rgba(15,23,42,0.06)]"
               >
-                <div className="flex items-center gap-3 px-4 pt-4">
+                <div className="flex items-center gap-3.5">
                   {profilePath ? (
                     <Link to={profilePath} aria-label={`Open ${fullName || "user"} profile`} className="shrink-0">
                       {avatarUrl ? (
                         <img
                           src={avatarUrl}
                           alt={fullName || "Story avatar"}
-                          className="h-10 w-10 rounded-full object-cover"
+                          className="h-11 w-11 rounded-full object-cover"
                         />
                       ) : (
                         <div
-                          className={`flex h-10 w-10 items-center justify-center rounded-full text-xs font-semibold ${
-                            isDark ? "bg-slate-800 text-slate-100" : "bg-slate-100 text-slate-700"
-                          }`}
+                          className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700"
                         >
                           {initials || "U"}
                         </div>
@@ -390,13 +356,11 @@ function HomePage() {
                     <img
                       src={avatarUrl}
                       alt={fullName || "Story avatar"}
-                      className="h-10 w-10 rounded-full object-cover"
+                      className="h-11 w-11 rounded-full object-cover"
                     />
                   ) : (
                     <div
-                      className={`flex h-10 w-10 items-center justify-center rounded-full text-xs font-semibold ${
-                        isDark ? "bg-slate-800 text-slate-100" : "bg-slate-100 text-slate-700"
-                      }`}
+                      className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700"
                     >
                       {initials || "U"}
                     </div>
@@ -406,39 +370,30 @@ function HomePage() {
                     {profilePath ? (
                       <Link
                         to={profilePath}
-                        className={`block truncate text-sm font-semibold transition ${
-                          isDark ? "hover:text-sky-300" : "hover:text-[#c446ff]"
-                        }`}
+                        className="block truncate text-sm font-bold text-slate-900 transition hover:text-slate-700"
                       >
                         {fullName}
                       </Link>
                     ) : (
-                      <p className="truncate text-sm font-semibold">{fullName}</p>
+                      <p className="truncate text-sm font-bold text-slate-900">{fullName}</p>
                     )}
-                    <p className={`text-[11px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                      {story.created_at_label}
-                    </p>
                   </div>
                 </div>
 
                 <button
                   type="button"
                   onClick={() => handleOpenStoryViewer(index)}
-                  className="block px-4 pb-4 pt-3 text-left"
+                  className="mt-[18px] block text-left"
                 >
-                  <div className="overflow-hidden rounded-2xl">
+                  <div className="overflow-hidden rounded-[18px]">
                     {story.image_url ? (
                       <img
                         src={story.image_url}
                         alt={`${fullName || "Story"}'s story`}
-                        className="h-40 w-full object-cover"
+                        className="aspect-square w-full object-cover"
                       />
                     ) : (
-                      <div
-                        className={`flex h-40 w-full items-center justify-center text-sm ${
-                          isDark ? "bg-slate-950 text-slate-400" : "bg-slate-100 text-slate-500"
-                        }`}
-                      >
+                      <div className="flex aspect-square w-full items-center justify-center bg-slate-100 text-sm text-slate-500">
                         No image
                       </div>
                     )}

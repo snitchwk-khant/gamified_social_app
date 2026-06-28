@@ -2,7 +2,7 @@ import { useAuth } from "../../context/auth_context";
 import { useTheme } from "../../context/theme_context";
 
 function UserCard() {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const { isDark } = useTheme();
   const displayName = user?.full_name || user?.name || user?.email?.split("@")[0] || "Team member";
   const initials = user?.initials || displayName?.charAt(0)?.toUpperCase() || "T";
@@ -42,13 +42,15 @@ function UserCard() {
           </p>
         </div>
       </div>
-      <div
-        className={`mt-5 rounded-2xl p-4 text-sm ${
-          isDark ? "bg-slate-950 text-slate-300" : "bg-white text-slate-600"
+      <button
+        type="button"
+        onClick={signOut}
+        className={`mt-5 w-full rounded-2xl p-4 text-center text-sm font-semibold transition ${
+          isDark ? "bg-slate-950 text-slate-300 hover:text-white" : "bg-white text-slate-600 hover:text-slate-900"
         }`}
       >
-        {user?.bio || "Drive engagement, celebrate peers, and unlock rewards."}
-      </div>
+        Sign Out
+      </button>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { useAuth } from "../../context/auth_context";
 import { useTheme } from "../../context/theme_context";
 
 function LeftSidebar() {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const isAdmin = user?.role?.toString().trim().toLowerCase() === "admin";
 
@@ -28,7 +28,6 @@ function LeftSidebar() {
             title={isDark ? "Light mode" : "Dark mode"}
             onClick={toggleTheme}
           />
-          <SidebarAction icon="↩" title="Sign Out" onClick={signOut} />
           {isAdmin ? <MenuItem to="/admin" icon="🛡️" title="Admin" /> : null}
         </nav>
       </div>

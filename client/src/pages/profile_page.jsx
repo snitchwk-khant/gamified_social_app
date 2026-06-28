@@ -3,10 +3,11 @@ import { useParams } from "react-router-dom";
 import { useAuth } from "../context/auth_context";
 import { useTheme } from "../context/theme_context";
 import {
+  deleteProfileAlbumImage,
   getProfile,
+  getProfileAlbumImages,
   getProfileById,
   getProfileStats,
-  parseProfileAlbumUrls,
   saveProfile,
   uploadProfileAlbumImage,
 } from "../services/profile_service";
@@ -16,6 +17,7 @@ const EMPTY_FORM = {
   bio: "",
   hobby: "",
   relationship_status: "",
+  zodiac_sign: "",
   phone: "",
   telegram_username: "",
   birthday: "",
@@ -23,6 +25,20 @@ const EMPTY_FORM = {
 };
 
 const RELATIONSHIP_OPTIONS = ["Single", "Relationship", "Situationship"];
+const ZODIAC_OPTIONS = [
+  "Aries",
+  "Taurus",
+  "Gemini",
+  "Cancer",
+  "Leo",
+  "Virgo",
+  "Libra",
+  "Scorpio",
+  "Sagittarius",
+  "Capricorn",
+  "Aquarius",
+  "Pisces",
+];
 
 function ProfilePage() {
   const { userId: routeUserId } = useParams();
@@ -35,7 +51,7 @@ function ProfilePage() {
   const [profile, setProfile] = useState(null);
   const [stats, setStats] = useState({ postsCount: 0, storiesCount: 0 });
   const [form, setForm] = useState(EMPTY_FORM);
-  const [albumUrls, setAlbumUrls] = useState([]);
+  const [albumImages, setAlbumImages] = useState([]);
   const [viewerIndex, setViewerIndex] = useState(null);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -48,7 +64,8 @@ function ProfilePage() {
   const initials = getInitials(displayName);
   const telegramUrl = getTelegramUrl(profile?.telegram_username);
   const musicUrl = getYouTubeUrl(getProfileMusicValue(profile));
-  const activeViewerImage = viewerIndex !== null ? albumUrls[viewerIndex] : null;
+  const zodiacSign = getProfileZodiacValue(profile);
+  const activeViewerImage = viewerIndex !== null ? albumImages[viewerIndex] : null;
 
   useEffect(() => {
     let isMounted = true;
@@ -58,6 +75,7 @@ function ProfilePage() {
         setLoading(false);
         setError(null);
         setProfile(null);
+        setAlbumImages([]);
         return;
       }
 
@@ -67,9 +85,10 @@ function ProfilePage() {
       setEditing(false);
 
       try {
-        const [profileData, statsData] = await Promise.all([
+        const [profileData, statsData, albumData] = await Promise.all([
           isOwnProfile ? getProfile() : getProfileById(profileUserId),
           getProfileStats(profileUserId),
+          getProfileAlbumImages(profileUserId),
         ]);
 
         if (!isMounted) {
@@ -80,7 +99,7 @@ function ProfilePage() {
           setProfile(null);
           setStats({ postsCount: 0, storiesCount: 0 });
           setForm(EMPTY_FORM);
-          setAlbumUrls([]);
+          setAlbumImages([]);
           setError("Unable to find this profile.");
           return;
         }
@@ -92,12 +111,13 @@ function ProfilePage() {
           bio: profileData.bio || "",
           hobby: profileData.hobby || "",
           relationship_status: profileData.relationship_status || "",
+          zodiac_sign: getProfileZodiacValue(profileData),
           phone: profileData.phone || "",
           telegram_username: profileData.telegram_username || "",
           birthday: profileData.birthday || "",
           favorite_music: getProfileMusicValue(profileData),
         });
-        setAlbumUrls(parseProfileAlbumUrls(profileData.profile_album_urls));
+        setAlbumImages(albumData);
       } catch (err) {
         if (!isMounted) {
           return;
@@ -133,14 +153,13 @@ function ProfilePage() {
     bio: form.bio.trim(),
     hobby: form.hobby.trim(),
     relationship_status: form.relationship_status || null,
-    zodiac_sign: profile?.zodiac_sign || null,
+    zodiac_sign: form.zodiac_sign || null,
     phone: form.phone.trim(),
     telegram_username: normalizeTelegramUsername(form.telegram_username),
     birthday: form.birthday ? form.birthday : null,
     favorite_music: form.favorite_music.trim(),
     location: profile?.location || "",
     skills: profile?.skills || "",
-    profile_album_urls: albumUrls,
     ...overrides,
   });
 
@@ -167,7 +186,6 @@ function ProfilePage() {
 
       setProfile(savedProfile);
       setStats(nextStats);
-      setAlbumUrls(parseProfileAlbumUrls(savedProfile.profile_album_urls));
       setEditing(false);
       await refreshUserProfile(savedProfile);
       setSuccess("Profile saved successfully.");
@@ -180,7 +198,7 @@ function ProfilePage() {
   };
 
   const handleOpenAlbumPicker = () => {
-    if (!isOwnProfile || albumUploading || albumUrls.length >= 6) {
+    if (!isOwnProfile || albumUploading || albumImages.length >= 6) {
       return;
     }
 
@@ -195,8 +213,8 @@ function ProfilePage() {
       return;
     }
 
-    if (albumUrls.length >= 6) {
-      setError("Profile Album can contain up to 6 images.");
+    if (albumImages.length >= 6) {
+      setError("Maximum 6 profile photos allowed.");
       input.value = "";
       return;
     }
@@ -206,25 +224,117 @@ function ProfilePage() {
     setSuccess(null);
 
     try {
-      const imageUrl = await uploadProfileAlbumImage(user.id, file);
-      const nextAlbumUrls = [...albumUrls, imageUrl].filter(Boolean).slice(0, 6);
-      const savedProfile = await saveProfile(
-        user.id,
-        buildProfileUpdates({ profile_album_urls: nextAlbumUrls })
-      );
+      const albumImage = await uploadProfileAlbumImage(user.id, file);
 
-      setProfile(savedProfile);
-      setAlbumUrls(parseProfileAlbumUrls(savedProfile.profile_album_urls));
-      await refreshUserProfile(savedProfile);
+      if (albumImage) {
+        setAlbumImages((current) => [...current, albumImage].slice(0, 6));
+      }
+
       setSuccess("Photo added to Profile Album.");
     } catch (err) {
       console.error("Profile Album Upload Error:", err);
-      setError("Unable to add photo. Please try again.");
+      setError(err?.message === "Maximum 6 profile photos allowed." ? err.message : "Unable to add photo. Please try again.");
     } finally {
       input.value = "";
       setAlbumUploading(false);
     }
   };
+
+  const handleDeleteAlbumImage = async (albumImage) => {
+    if (!isOwnProfile || !albumImage?.id) {
+      return;
+    }
+
+    const previousAlbumImages = albumImages;
+
+    setAlbumImages((current) => current.filter((item) => item.id !== albumImage.id));
+    setViewerIndex((current) => {
+      if (current === null) {
+        return current;
+      }
+
+      const nextAlbumImages = previousAlbumImages.filter((item) => item.id !== albumImage.id);
+
+      if (nextAlbumImages.length === 0) {
+        return null;
+      }
+
+      return Math.min(current, nextAlbumImages.length - 1);
+    });
+    setError(null);
+    setSuccess(null);
+
+    try {
+      await deleteProfileAlbumImage(albumImage);
+      setSuccess("Photo removed from Profile Album.");
+    } catch (err) {
+      console.error("Profile Album Delete Error:", err);
+      setAlbumImages(previousAlbumImages);
+      setError("Unable to delete photo. Please try again.");
+    }
+  };
+
+  const handleCloseViewer = () => {
+    setViewerIndex(null);
+  };
+
+  const handlePreviousViewerImage = () => {
+    setViewerIndex((current) => {
+      if (current === null || albumImages.length === 0) {
+        return current;
+      }
+
+      return current === 0 ? albumImages.length - 1 : current - 1;
+    });
+  };
+
+  const handleNextViewerImage = () => {
+    setViewerIndex((current) => {
+      if (current === null || albumImages.length === 0) {
+        return current;
+      }
+
+      return current === albumImages.length - 1 ? 0 : current + 1;
+    });
+  };
+
+  useEffect(() => {
+    if (viewerIndex === null) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setViewerIndex(null);
+      }
+
+      if (event.key === "ArrowLeft") {
+        setViewerIndex((current) => {
+          if (current === null || albumImages.length === 0) {
+            return current;
+          }
+
+          return current === 0 ? albumImages.length - 1 : current - 1;
+        });
+      }
+
+      if (event.key === "ArrowRight") {
+        setViewerIndex((current) => {
+          if (current === null || albumImages.length === 0) {
+            return current;
+          }
+
+          return current === albumImages.length - 1 ? 0 : current + 1;
+        });
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [albumImages.length, viewerIndex]);
 
   if (loading) {
     return (
@@ -343,7 +453,7 @@ function ProfilePage() {
             }`}
           >
             <div className="space-y-4">
-              <InfoLine icon={getZodiacIcon(profile.zodiac_sign)} text={profile.zodiac_sign || "N/A"} />
+              <InfoLine icon={getZodiacIcon(zodiacSign)} text={zodiacSign || "N/A"} />
               <InfoLine icon="📱" text={profile.phone || "N/A"} />
               <InfoLine icon="🎂" text={formatBirthday(profile.birthday)} />
               <InfoLine icon="✈" text={profile.telegram_username || "N/A"} href={telegramUrl} />
@@ -356,7 +466,9 @@ function ProfilePage() {
               isDark ? "border-slate-800 bg-slate-900 shadow-xl" : "border-slate-200 bg-white shadow-sm"
             }`}
           >
-            <h3 className={`text-lg font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>Bio</h3>
+            {isOwnProfile ? (
+              <h3 className={`text-lg font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>Bio</h3>
+            ) : null}
             <p className={`mx-auto mt-3 max-w-2xl whitespace-pre-wrap text-sm leading-6 ${isDark ? "text-slate-200" : "text-slate-700"}`}>
               {profile.bio || "N/A"}
             </p>
@@ -368,50 +480,44 @@ function ProfilePage() {
             }`}
           >
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {Array.from({ length: 6 }).map((_, index) => {
-                const imageUrl = albumUrls[index];
-                const isFirstEmptySlot = index === albumUrls.length;
+              {albumImages.map((albumImage, index) => (
+                <div key={albumImage.id} className="relative aspect-square">
+                  <button
+                    type="button"
+                    onClick={() => setViewerIndex(index)}
+                    className="h-full w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-100"
+                  >
+                    <img src={albumImage.image_url} alt={`Profile album ${index + 1}`} className="h-full w-full object-cover" />
+                  </button>
 
-                if (imageUrl) {
-                  return (
+                  {isOwnProfile ? (
                     <button
                       type="button"
-                      key={imageUrl}
-                      onClick={() => setViewerIndex(index)}
-                      className="aspect-square overflow-hidden rounded-2xl border border-slate-200 bg-slate-100"
+                      aria-label={`Delete profile album ${index + 1}`}
+                      onClick={() => handleDeleteAlbumImage(albumImage)}
+                      className="absolute right-2 top-2 rounded-full bg-black/70 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-black"
                     >
-                      <img src={imageUrl} alt={`Profile album ${index + 1}`} className="h-full w-full object-cover" />
+                      Delete
                     </button>
-                  );
-                }
+                  ) : null}
+                </div>
+              ))}
 
-                if (isOwnProfile && isFirstEmptySlot) {
-                  return (
-                    <button
-                      type="button"
-                      key={`album-empty-${index}`}
-                      onClick={handleOpenAlbumPicker}
-                      disabled={albumUploading}
-                      className={`aspect-square rounded-2xl border border-dashed text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 ${
-                        isDark
-                          ? "border-slate-700 bg-slate-950 text-slate-300 hover:bg-slate-800"
-                          : "border-slate-300 bg-slate-50 text-slate-600 hover:bg-slate-100"
-                      }`}
-                    >
-                      {albumUploading ? "Adding..." : "+ Add Photo"}
-                    </button>
-                  );
-                }
-
-                return (
-                  <div
-                    key={`album-placeholder-${index}`}
-                    className={`aspect-square rounded-2xl border border-dashed ${
-                      isDark ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-slate-50"
-                    }`}
-                  />
-                );
-              })}
+              {isOwnProfile && albumImages.length < 6 ? (
+                <button
+                  type="button"
+                  key="album-add-photo"
+                  onClick={handleOpenAlbumPicker}
+                  disabled={albumUploading}
+                  className={`aspect-square rounded-2xl border border-dashed text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 ${
+                    isDark
+                      ? "border-slate-700 bg-slate-950 text-slate-300 hover:bg-slate-800"
+                      : "border-slate-300 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  {albumUploading ? "Adding..." : "+ Add Photo"}
+                </button>
+              ) : null}
             </div>
 
             <input
@@ -436,6 +542,12 @@ function ProfilePage() {
                   value={form.relationship_status}
                   onChange={handleChange("relationship_status")}
                   options={RELATIONSHIP_OPTIONS}
+                />
+                <SelectField
+                  label="Zodiac Sign"
+                  value={form.zodiac_sign}
+                  onChange={handleChange("zodiac_sign")}
+                  options={ZODIAC_OPTIONS}
                 />
                 <Field label="Phone" value={form.phone} onChange={handleChange("phone")} />
                 <Field label="Birthday" type="date" value={form.birthday} onChange={handleChange("birthday")} />
@@ -480,16 +592,50 @@ function ProfilePage() {
           ) : null}
 
           {activeViewerImage ? (
-            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/95 p-4">
+            <div
+              className="fixed inset-0 z-[120] flex items-center justify-center bg-black/95 p-4"
+              onClick={handleCloseViewer}
+            >
               <button
                 type="button"
                 aria-label="Close album viewer"
-                onClick={() => setViewerIndex(null)}
+                onClick={handleCloseViewer}
                 className="absolute right-4 top-4 rounded-full border border-white/40 bg-black/40 px-4 py-2 text-sm font-semibold text-white"
               >
                 Close
               </button>
-              <img src={activeViewerImage} alt="Profile album fullscreen" className="max-h-full max-w-full rounded-2xl object-contain" />
+
+              {albumImages.length > 1 ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handlePreviousViewerImage();
+                    }}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full border border-white/40 bg-black/40 px-4 py-3 text-sm font-semibold text-white"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleNextViewerImage();
+                    }}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full border border-white/40 bg-black/40 px-4 py-3 text-sm font-semibold text-white"
+                  >
+                    Next
+                  </button>
+                </>
+              ) : null}
+
+              <img
+                src={activeViewerImage.image_url}
+                alt="Profile album fullscreen"
+                className="max-h-full max-w-full rounded-2xl object-contain"
+                onClick={(event) => event.stopPropagation()}
+              />
             </div>
           ) : null}
         </>
@@ -533,6 +679,16 @@ function getTelegramUrl(value) {
 
 function getProfileMusicValue(profile) {
   const value = profile?.favorite_music;
+
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  return value ? String(value).trim() : "";
+}
+
+function getProfileZodiacValue(profile) {
+  const value = profile?.zodiac_sign;
 
   if (typeof value === "string") {
     return value.trim();

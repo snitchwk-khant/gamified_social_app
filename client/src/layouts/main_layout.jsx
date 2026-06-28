@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 
 import DesktopLayout from "../components/layout/desktop_layout";
 import LeftSidebar from "../components/sidebar/left_sidebar";
-import Topbar from "../components/layout/topbar";
 import ChatWidget from "../components/chat/chat_widget";
 import { getFeatureFlags } from "../services/admin_configs_service";
 
@@ -32,7 +31,6 @@ function MainLayout() {
       left={<LeftSidebar />}
       center={
         <div className="flex h-full flex-col gap-5">
-          <Topbar />
           <div className="flex-1 overflow-auto pb-4">
             <Outlet />
           </div>

@@ -27,6 +27,8 @@ export function formatSkillsForDisplay(skills) {
   return trimmed;
 }
 
+const MAX_PROFILE_ALBUM_IMAGES = 6;
+
 function normalizeSkillsForStorage(skillsValue) {
   return formatSkillsForDisplay(skillsValue)
     .split(",")
@@ -35,38 +37,8 @@ function normalizeSkillsForStorage(skillsValue) {
     .join(", ");
 }
 
-export function parseProfileAlbumUrls(value) {
-  if (Array.isArray(value)) {
-    return value.filter(Boolean).slice(0, 6);
-  }
-
-  if (typeof value !== "string") {
-    return [];
-  }
-
-  const trimmed = value.trim();
-
-  if (!trimmed) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(trimmed);
-    if (Array.isArray(parsed)) {
-      return parsed.filter(Boolean).slice(0, 6);
-    }
-  } catch {
-    return trimmed
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean)
-      .slice(0, 6);
-  }
-
-  return [];
-}
-
 const PROFILE_FIELDS = "*";
+const PROFILE_ALBUM_FIELDS = "id,user_id,image_url,sort_order,created_at";
 
 function normalizeProfileMusicValue(value) {
   if (typeof value === "string") {
@@ -261,9 +233,23 @@ export async function uploadProfileAlbumImage(userId, file) {
     throw new Error("Profile album uploads must be images.");
   }
 
+  const { count, error: countError } = await supabase
+    .from("profile_albums")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId);
+
+  if (countError) {
+    console.error("Profile album count failed:", countError);
+    throw countError;
+  }
+
+  if ((count || 0) >= MAX_PROFILE_ALBUM_IMAGES) {
+    throw new Error("Maximum 6 profile photos allowed.");
+  }
+
   const extension = file.name.split(".").pop() || "jpg";
   const timestamp = Date.now();
-  const filePath = `${userId}/album-${timestamp}.${extension}`;
+  const filePath = `${userId}/album/${timestamp}.${extension}`;
 
   const { error: uploadError } = await supabase.storage
     .from("avatars")
@@ -280,7 +266,97 @@ export async function uploadProfileAlbumImage(userId, file) {
 
   const { data: publicUrlData } = supabase.storage.from("avatars").getPublicUrl(filePath);
 
-  return publicUrlData?.publicUrl || null;
+  const publicUrl = publicUrlData?.publicUrl || null;
+
+  if (!publicUrl) {
+    throw new Error("Unable to create profile album image URL.");
+  }
+
+  const { data, error } = await supabase
+    .from("profile_albums")
+    .insert({
+      user_id: userId,
+      image_url: publicUrl,
+      sort_order: count || 0,
+    })
+    .select(PROFILE_ALBUM_FIELDS)
+    .single();
+
+  if (error) {
+    console.error("Profile album insert failed:", error);
+    throw error;
+  }
+
+  return data;
+}
+
+export async function getProfileAlbumImages(userId) {
+  if (!userId) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("profile_albums")
+    .select(PROFILE_ALBUM_FIELDS)
+    .eq("user_id", userId)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true })
+    .limit(MAX_PROFILE_ALBUM_IMAGES);
+
+  if (error) {
+    console.error("getProfileAlbumImages Error:", error);
+    throw error;
+  }
+
+  return data || [];
+}
+
+export async function deleteProfileAlbumImage(albumImage) {
+  if (!albumImage?.id) {
+    throw new Error("Missing profile album image.");
+  }
+
+  const { error } = await supabase
+    .from("profile_albums")
+    .delete()
+    .eq("id", albumImage.id);
+
+  if (error) {
+    console.error("deleteProfileAlbumImage Error:", error);
+    throw error;
+  }
+
+  const storagePath = getProfileAlbumStoragePath(albumImage.image_url);
+
+  if (storagePath) {
+    const { error: removeError } = await supabase.storage.from("avatars").remove([storagePath]);
+
+    if (removeError) {
+      console.error("Profile album storage delete failed:", removeError);
+    }
+  }
+
+  return albumImage.id;
+}
+
+function getProfileAlbumStoragePath(imageUrl) {
+  if (!imageUrl) {
+    return "";
+  }
+
+  try {
+    const url = new URL(imageUrl);
+    const marker = "/storage/v1/object/public/avatars/";
+    const markerIndex = url.pathname.indexOf(marker);
+
+    if (markerIndex === -1) {
+      return "";
+    }
+
+    return decodeURIComponent(url.pathname.slice(markerIndex + marker.length));
+  } catch {
+    return "";
+  }
 }
 
 export async function saveProfile(userId, profileData, avatarFile) {
@@ -350,10 +426,11 @@ export async function saveProfile(userId, profileData, avatarFile) {
 }
 
 export default {
+  deleteProfileAlbumImage,
   getProfile,
+  getProfileAlbumImages,
   getProfileById,
   getProfileStats,
-  parseProfileAlbumUrls,
   saveProfile,
   uploadAvatar,
   uploadProfileAlbumImage,
