@@ -1,14 +1,17 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { AuthProvider, useAuth } from "./context/auth_context";
 import { SocketProvider } from "./context/socket_context";
 import { ThemeProvider, useTheme } from "./context/theme_context";
+import AdminLayout from "./admin/layouts/admin_layout";
+import { adminRoutes, createAdminRouteElement } from "./admin/routes/admin_routes";
 import MainLayout from "./layouts/main_layout";
-import AdminPage from "./pages/admin_page";
 import HomePage from "./pages/home_page";
 import LoginPage from "./pages/login_page";
 import NotificationsPage from "./pages/notifications_page";
 import ProfilePage from "./pages/profile_page";
 import ChangePasswordPage from "./pages/change_password_page";
+import { getProfile } from "./services/profile_service";
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
@@ -71,9 +74,72 @@ function AccessDeniedScreen() {
 
 function RequireAdmin({ children }) {
   const { user } = useAuth();
-  const role = user?.role?.toString().trim().toLowerCase();
+  const { isDark } = useTheme();
+  const [profile, setProfile] = useState(null);
+  const [profileRole, setProfileRole] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(true);
 
-  if (role !== "admin") {
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadProfileRole() {
+      setProfileLoading(true);
+
+      try {
+        const profile = await getProfile();
+        console.log("PROFILE", profile);
+        console.log("ROLE", profile?.role);
+        console.log("USER", user);
+
+        if (isMounted) {
+          setProfile(profile);
+          setProfileRole(profile?.role?.toString().trim().toLowerCase() || null);
+        }
+      } catch (profileError) {
+        console.error("Admin profile role load error:", profileError);
+
+        if (isMounted) {
+          setProfile(null);
+          setProfileRole(null);
+        }
+      } finally {
+        if (isMounted) {
+          setProfileLoading(false);
+        }
+      }
+    }
+
+    if (user?.id) {
+      loadProfileRole();
+    } else {
+      setProfile(null);
+      setProfileRole(null);
+      setProfileLoading(false);
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id, user?.role]);
+
+  if (profileLoading) {
+    return (
+      <div
+        className={`flex min-h-screen items-center justify-center ${
+          isDark ? "bg-slate-950 text-slate-100" : "bg-[#f0f2f5] text-slate-700"
+        }`}
+      >
+        Checking admin access...
+      </div>
+    );
+  }
+
+  if (profileRole !== "admin") {
+    console.log("ADMIN CHECK", {
+      profile,
+      role: profile?.role,
+      user,
+    });
     return <AccessDeniedScreen />;
   }
 
@@ -99,6 +165,24 @@ function App() {
                 }
               />
               <Route
+                path="/admin"
+                element={
+                  <RequireAuth>
+                    <RequirePasswordChange>
+                      <RequireAdmin>
+                        <AdminLayout />
+                      </RequireAdmin>
+                    </RequirePasswordChange>
+                  </RequireAuth>
+                }
+              >
+                <Route index element={createAdminRouteElement(adminRoutes[0])} />
+                {adminRoutes.map((route) => (
+                  <Route key={route.path} path={route.path} element={createAdminRouteElement(route)} />
+                ))}
+                <Route path="*" element={<Navigate to="/admin" replace />} />
+              </Route>
+              <Route
                 path="/"
                 element={
                   <RequireAuth>
@@ -112,14 +196,6 @@ function App() {
                 <Route path="notifications" element={<NotificationsPage />} />
                 <Route path="profile" element={<ProfilePage />} />
                 <Route path="profile/:userId" element={<ProfilePage />} />
-                <Route
-                  path="admin"
-                  element={
-                    <RequireAdmin>
-                      <AdminPage />
-                    </RequireAdmin>
-                  }
-                />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Route>
             </Routes>

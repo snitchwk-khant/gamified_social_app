@@ -5,7 +5,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const ALLOWED_ROLES = new Set(["admin", "hr", "accountant", "employee"]);
+const USER_FIELDS = "id,avatar_url,full_name,email,role,created_at";
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -113,84 +113,21 @@ Deno.serve(async (req) => {
     return diagnosticResponse(error);
   }
 
-  let payload: Record<string, unknown>;
+  const { data: users, error: usersError } = await serviceClient
+    .from("profiles")
+    .select(USER_FIELDS)
+    .order("created_at", { ascending: false });
 
-  try {
-    payload = await req.json();
-  } catch (error) {
-    return diagnosticResponse(error instanceof Error ? error : diagnosticError("Invalid request body."));
+  if (usersError) {
+    return diagnosticResponse(usersError);
   }
 
-  const fullName = (payload.full_name || "").toString().trim();
-  const email = (payload.email || "").toString().trim().toLowerCase();
-  const password = (payload.password || "").toString();
-  const department = (payload.department || "").toString().trim();
-  const position = (payload.position || "").toString().trim();
-  const requestedRole = normalizeRole(payload.role);
-  const role = requestedRole === "user" ? "employee" : requestedRole;
-
-  if (!fullName || !email || !password || !role) {
-    const error = diagnosticError("All required fields must be provided.", {
-      hasFullName: Boolean(fullName),
-      hasEmail: Boolean(email),
-      hasPassword: Boolean(password),
-      hasRole: Boolean(role),
-    });
-    return diagnosticResponse(error);
-  }
-
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return diagnosticResponse(diagnosticError("A valid email address is required.", { email }));
-  }
-
-  if (password.length < 8) {
-    return diagnosticResponse(diagnosticError("Password must be at least 8 characters."));
-  }
-
-  if (!ALLOWED_ROLES.has(role)) {
-    return diagnosticResponse(diagnosticError("Invalid role value.", { role }));
-  }
-
-  const { data: createdUserData, error: createUserError } = await serviceClient.auth.admin.createUser({
-    email,
-    password,
-    user_metadata: {
-      full_name: fullName,
-      name: fullName,
-    },
+  return jsonResponse({
+    success: true,
+    users: (users || []).map((user) => ({
+      ...user,
+      is_active: true,
+      status: "Active",
+    })),
   });
-
-  if (createUserError || !createdUserData?.user?.id) {
-    const error =
-      createUserError ||
-      diagnosticError("Unable to create auth user.", {
-        reason: "Supabase Admin API did not return a user id.",
-        createdUserData,
-      });
-    return diagnosticResponse(error);
-  }
-
-  const createdUserId = createdUserData.user.id;
-  const profilePayload = {
-    id: createdUserId,
-    full_name: fullName,
-    email,
-    department,
-    position,
-    role,
-    updated_at: new Date().toISOString(),
-  };
-
-  const { error: profileError } = await serviceClient.from("profiles").insert(profilePayload);
-
-  if (profileError) {
-    const { error: cleanupError } = await serviceClient.auth.admin.deleteUser(createdUserId);
-    return diagnosticResponse(profileError, {
-      profileError,
-      cleanupError,
-      profilePayload,
-    });
-  }
-
-  return jsonResponse({ success: true });
 });

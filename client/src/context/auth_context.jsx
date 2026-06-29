@@ -48,6 +48,9 @@ export function AuthProvider({ children }) {
 
         try {
           profile = await getProfile();
+          console.log("PROFILE", profile);
+          console.log("ROLE", profile?.role);
+          console.log("USER", userInfo);
         } catch (profileError) {
           console.error("Profile sync error:", profileError);
         }
@@ -67,7 +70,12 @@ export function AuthProvider({ children }) {
         const userInfo = session.user;
 
         getProfile()
-          .then((profile) => setUser(buildUserState(userInfo, profile)))
+          .then((profile) => {
+            console.log("PROFILE", profile);
+            console.log("ROLE", profile?.role);
+            console.log("USER", userInfo);
+            setUser(buildUserState(userInfo, profile));
+          })
           .catch((profileError) => {
             console.error("Profile sync error:", profileError);
             setUser(buildUserState(userInfo));
@@ -79,6 +87,53 @@ export function AuthProvider({ children }) {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!user?.id) {
+      return undefined;
+    }
+
+    const channel = supabase
+      .channel(`profile-sync-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "profiles",
+          filter: `id=eq.${user.id}`,
+        },
+        (payload) => {
+          if (payload.eventType === "DELETE") {
+            setUser((currentUser) => {
+              if (currentUser?.id !== user.id) {
+                return currentUser;
+              }
+
+              return buildUserState(currentUser);
+            });
+            return;
+          }
+
+          if (!payload.new) {
+            return;
+          }
+
+          setUser((currentUser) => {
+            if (currentUser?.id !== user.id) {
+              return currentUser;
+            }
+
+            return buildUserState(currentUser, payload.new);
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
 
   const value = useMemo(
     () => ({
@@ -100,6 +155,9 @@ export function AuthProvider({ children }) {
 
         try {
           profile = await getProfile();
+          console.log("PROFILE", profile);
+          console.log("ROLE", profile?.role);
+          console.log("USER", userInfo);
         } catch (profileError) {
           console.error("Profile sync error:", profileError);
         }
@@ -122,6 +180,9 @@ export function AuthProvider({ children }) {
         if (!profile) {
           try {
             profile = await getProfile();
+            console.log("PROFILE", profile);
+            console.log("ROLE", profile?.role);
+            console.log("USER", data.user);
           } catch (profileError) {
             console.error("Profile sync error:", profileError);
           }
