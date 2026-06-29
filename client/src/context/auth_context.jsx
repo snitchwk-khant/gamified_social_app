@@ -48,9 +48,6 @@ export function AuthProvider({ children }) {
 
         try {
           profile = await getProfile();
-          console.log("PROFILE", profile);
-          console.log("ROLE", profile?.role);
-          console.log("USER", userInfo);
         } catch (profileError) {
           console.error("Profile sync error:", profileError);
         }
@@ -71,9 +68,6 @@ export function AuthProvider({ children }) {
 
         getProfile()
           .then((profile) => {
-            console.log("PROFILE", profile);
-            console.log("ROLE", profile?.role);
-            console.log("USER", userInfo);
             setUser(buildUserState(userInfo, profile));
           })
           .catch((profileError) => {
@@ -155,9 +149,6 @@ export function AuthProvider({ children }) {
 
         try {
           profile = await getProfile();
-          console.log("PROFILE", profile);
-          console.log("ROLE", profile?.role);
-          console.log("USER", userInfo);
         } catch (profileError) {
           console.error("Profile sync error:", profileError);
         }
@@ -180,9 +171,6 @@ export function AuthProvider({ children }) {
         if (!profile) {
           try {
             profile = await getProfile();
-            console.log("PROFILE", profile);
-            console.log("ROLE", profile?.role);
-            console.log("USER", data.user);
           } catch (profileError) {
             console.error("Profile sync error:", profileError);
           }

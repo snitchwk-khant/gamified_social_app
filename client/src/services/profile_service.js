@@ -39,6 +39,35 @@ function normalizeSkillsForStorage(skillsValue) {
 
 const PROFILE_FIELDS = "*";
 const PROFILE_ALBUM_FIELDS = "id,user_id,image_url,sort_order,created_at";
+const PROFILE_ROLES = new Set(["admin", "hr", "accountant", "employee"]);
+
+function normalizeRoleForProfile(value) {
+  const role = value?.toString().trim().toLowerCase();
+  return PROFILE_ROLES.has(role) ? role : "employee";
+}
+
+function getInitialMustChangePassword(user, role) {
+  const appMetadataValue = user?.app_metadata?.must_change_password;
+
+  if (typeof appMetadataValue === "boolean") {
+    return appMetadataValue;
+  }
+
+  if (typeof appMetadataValue === "string") {
+    return appMetadataValue.trim().toLowerCase() === "true";
+  }
+
+  const userMetadataValue = user?.user_metadata?.must_change_password;
+
+  if (
+    userMetadataValue === true ||
+    (typeof userMetadataValue === "string" && userMetadataValue.trim().toLowerCase() === "true")
+  ) {
+    return true;
+  }
+
+  return role !== "admin";
+}
 
 function normalizeProfileMusicValue(value) {
   if (typeof value === "string") {
@@ -59,16 +88,19 @@ function normalizeProfile(profile) {
   };
 }
 
-function buildDefaultProfile(user) {
-  const email = user?.email || "";
+function buildDefaultProfile(user, overrides = {}) {
+  const role = normalizeRoleForProfile(overrides.role ?? user?.app_metadata?.role);
+  const email = overrides.email ?? user?.email ?? "";
   const emailPrefix = email.split("@")[0] || "user";
-  const fullName = user?.user_metadata?.name || emailPrefix;
+  const fullName =
+    overrides.full_name ?? user?.user_metadata?.full_name ?? user?.user_metadata?.name ?? emailPrefix;
 
   return {
-    id: user.id,
+    id: overrides.id ?? user.id,
     email,
     full_name: fullName,
-    role: "employee",
+    role,
+    must_change_password: getInitialMustChangePassword(user, role),
   };
 }
 
@@ -408,9 +440,23 @@ export async function saveProfile(userId, profileData, avatarFile) {
   }
 
   if (!data) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const defaultPayload = buildDefaultProfile(user?.id === userId ? user : null, {
+      id: userId,
+      email: profileData.email,
+      full_name: profileData.full_name,
+      role: profileData.role,
+    });
+
     const { data: insertedProfile, error: insertError } = await supabase
       .from("profiles")
-      .insert({ id: userId, ...updatePayload })
+      .insert({
+        ...defaultPayload,
+        ...updatePayload,
+        must_change_password: defaultPayload.must_change_password,
+      })
       .select(PROFILE_FIELDS)
       .single();
 

@@ -16,8 +16,8 @@ function LoginPage() {
     setLoading(true);
 
     try {
-      await signIn({ email, password });
-      navigate("/");
+      const nextUser = await signIn({ email, password });
+      navigate(nextUser?.must_change_password ? "/change-password" : "/", { replace: true });
     } catch {
       setError("Invalid email or password");
     } finally {

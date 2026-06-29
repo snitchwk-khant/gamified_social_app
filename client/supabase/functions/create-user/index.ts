@@ -151,9 +151,16 @@ Deno.serve(async (req) => {
     return diagnosticResponse(diagnosticError("Invalid role value.", { role }));
   }
 
+  const mustChangePassword = role !== "admin";
+
   const { data: createdUserData, error: createUserError } = await serviceClient.auth.admin.createUser({
     email,
     password,
+    email_confirm: true,
+    app_metadata: {
+      role,
+      must_change_password: mustChangePassword,
+    },
     user_metadata: {
       full_name: fullName,
       name: fullName,
@@ -170,7 +177,21 @@ Deno.serve(async (req) => {
     return diagnosticResponse(error);
   }
 
-  const createdUserId = createdUserData.user.id;
+  const createdAuthUser = createdUserData.user;
+  const createdUserId = createdAuthUser.id;
+  const createdUserEmail = (createdAuthUser.email || "").toString().trim().toLowerCase();
+
+  if (createdUserEmail !== email) {
+    const { error: cleanupError } = await serviceClient.auth.admin.deleteUser(createdUserId);
+    const error = diagnosticError("Created auth user email does not match requested email.", {
+      requestedEmail: email,
+      createdUserEmail,
+      createdUserId,
+      cleanupError,
+    });
+    return diagnosticResponse(error);
+  }
+
   const profilePayload = {
     id: createdUserId,
     full_name: fullName,
@@ -178,19 +199,73 @@ Deno.serve(async (req) => {
     department,
     position,
     role,
+    must_change_password: mustChangePassword,
     updated_at: new Date().toISOString(),
   };
 
-  const { error: profileError } = await serviceClient.from("profiles").insert(profilePayload);
+  const { data: insertedProfile, error: profileError } = await serviceClient
+    .from("profiles")
+    .insert(profilePayload)
+    .select("id,email,full_name,role,must_change_password")
+    .single();
 
-  if (profileError) {
+  if (profileError || !insertedProfile) {
     const { error: cleanupError } = await serviceClient.auth.admin.deleteUser(createdUserId);
-    return diagnosticResponse(profileError, {
+    const error =
+      profileError ||
+      diagnosticError("Profile insert did not return an inserted row.", {
+        createdUserId,
+      });
+    return diagnosticResponse(error, {
       profileError,
+      insertedProfile,
       cleanupError,
+      createdAuthUser,
       profilePayload,
     });
   }
 
-  return jsonResponse({ success: true });
+  if (insertedProfile.id !== createdUserId) {
+    const { error: cleanupError } = await serviceClient.auth.admin.deleteUser(createdUserId);
+    const error = diagnosticError("Inserted profile id does not match created auth user id.", {
+      insertedProfileId: insertedProfile.id,
+      createdUserId,
+      cleanupError,
+    });
+    return diagnosticResponse(error, {
+      insertedProfile,
+      createdAuthUser,
+      profilePayload,
+    });
+  }
+
+  if ((insertedProfile.email || "").toString().trim().toLowerCase() !== createdUserEmail) {
+    const { error: cleanupError } = await serviceClient.auth.admin.deleteUser(createdUserId);
+    const error = diagnosticError("Inserted profile email does not match created auth user email.", {
+      insertedProfileEmail: insertedProfile.email || null,
+      createdUserEmail,
+      cleanupError,
+    });
+    return diagnosticResponse(error, {
+      insertedProfile,
+      createdAuthUser,
+      profilePayload,
+    });
+  }
+
+  if (Boolean(insertedProfile.must_change_password) !== mustChangePassword) {
+    const { error: cleanupError } = await serviceClient.auth.admin.deleteUser(createdUserId);
+    const error = diagnosticError("Inserted profile must_change_password does not match payload.", {
+      expectedMustChangePassword: mustChangePassword,
+      insertedMustChangePassword: insertedProfile.must_change_password,
+      cleanupError,
+    });
+    return diagnosticResponse(error, {
+      insertedProfile,
+      createdAuthUser,
+      profilePayload,
+    });
+  }
+
+  return jsonResponse({ success: true, user: createdAuthUser, profile: insertedProfile });
 });

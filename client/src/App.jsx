@@ -34,8 +34,53 @@ function RequireAuth({ children }) {
 
 function RequirePasswordChange({ children }) {
   const { user } = useAuth();
+  const { isDark } = useTheme();
+  const [mustChangePassword, setMustChangePassword] = useState(null);
 
-  if (user?.must_change_password) {
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadPasswordChangeStatus() {
+      try {
+        const profile = await getProfile();
+
+        if (isMounted) {
+          setMustChangePassword(Boolean(profile?.must_change_password));
+        }
+      } catch (profileError) {
+        console.error("Password change profile load error:", profileError);
+
+        if (isMounted) {
+          setMustChangePassword(Boolean(user?.must_change_password));
+        }
+      }
+    }
+
+    if (user?.id) {
+      setMustChangePassword(null);
+      loadPasswordChangeStatus();
+    } else {
+      setMustChangePassword(false);
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id, user?.must_change_password]);
+
+  if (mustChangePassword === null) {
+    return (
+      <div
+        className={`flex min-h-screen items-center justify-center ${
+          isDark ? "bg-slate-950 text-slate-100" : "bg-[#f0f2f5] text-slate-700"
+        }`}
+      >
+        Checking account security...
+      </div>
+    );
+  }
+
+  if (mustChangePassword) {
     return <Navigate to="/change-password" replace />;
   }
 
@@ -44,8 +89,53 @@ function RequirePasswordChange({ children }) {
 
 function RequirePasswordChangeOnly({ children }) {
   const { user } = useAuth();
+  const { isDark } = useTheme();
+  const [mustChangePassword, setMustChangePassword] = useState(null);
 
-  if (!user?.must_change_password) {
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadPasswordChangeStatus() {
+      try {
+        const profile = await getProfile();
+
+        if (isMounted) {
+          setMustChangePassword(Boolean(profile?.must_change_password));
+        }
+      } catch (profileError) {
+        console.error("Password change profile load error:", profileError);
+
+        if (isMounted) {
+          setMustChangePassword(Boolean(user?.must_change_password));
+        }
+      }
+    }
+
+    if (user?.id) {
+      setMustChangePassword(null);
+      loadPasswordChangeStatus();
+    } else {
+      setMustChangePassword(false);
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id, user?.must_change_password]);
+
+  if (mustChangePassword === null) {
+    return (
+      <div
+        className={`flex min-h-screen items-center justify-center ${
+          isDark ? "bg-slate-950 text-slate-100" : "bg-[#f0f2f5] text-slate-700"
+        }`}
+      >
+        Checking account security...
+      </div>
+    );
+  }
+
+  if (!mustChangePassword) {
     return <Navigate to="/" replace />;
   }
 
@@ -75,7 +165,6 @@ function AccessDeniedScreen() {
 function RequireAdmin({ children }) {
   const { user } = useAuth();
   const { isDark } = useTheme();
-  const [profile, setProfile] = useState(null);
   const [profileRole, setProfileRole] = useState(null);
   const [profileLoading, setProfileLoading] = useState(true);
 
@@ -87,19 +176,14 @@ function RequireAdmin({ children }) {
 
       try {
         const profile = await getProfile();
-        console.log("PROFILE", profile);
-        console.log("ROLE", profile?.role);
-        console.log("USER", user);
 
         if (isMounted) {
-          setProfile(profile);
           setProfileRole(profile?.role?.toString().trim().toLowerCase() || null);
         }
       } catch (profileError) {
         console.error("Admin profile role load error:", profileError);
 
         if (isMounted) {
-          setProfile(null);
           setProfileRole(null);
         }
       } finally {
@@ -112,7 +196,6 @@ function RequireAdmin({ children }) {
     if (user?.id) {
       loadProfileRole();
     } else {
-      setProfile(null);
       setProfileRole(null);
       setProfileLoading(false);
     }
@@ -135,11 +218,6 @@ function RequireAdmin({ children }) {
   }
 
   if (profileRole !== "admin") {
-    console.log("ADMIN CHECK", {
-      profile,
-      role: profile?.role,
-      user,
-    });
     return <AccessDeniedScreen />;
   }
 

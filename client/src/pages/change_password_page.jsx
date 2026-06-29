@@ -28,6 +28,11 @@ function ChangePasswordPage() {
       return;
     }
 
+    if (newPassword.length < 8) {
+      setError("New password must be at least 8 characters.");
+      return;
+    }
+
     setLoading(true);
 
     try {
