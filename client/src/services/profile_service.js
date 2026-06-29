@@ -42,6 +42,7 @@ function normalizeSkillsForStorage(skillsValue) {
 
 const PROFILE_FIELDS = "*";
 const PROFILE_ALBUM_FIELDS = "id,user_id,image_url,sort_order,created_at";
+const PROFILE_SEARCH_FIELDS = "id,avatar_url,full_name,employee_id,department,email";
 const PROFILE_ROLES = new Set(["admin", "hr", "accountant", "employee"]);
 
 function normalizeRoleForProfile(value) {
@@ -197,6 +198,56 @@ export async function getProfileById(userId) {
   }
 
   return normalizeProfile(data);
+}
+
+export async function searchProfiles(searchTerm, { excludeUserId = null } = {}) {
+  const normalizedSearch = searchTerm?.toString().trim().replace(/[,%()]/g, " ").replace(/\s+/g, " ");
+
+  if (!normalizedSearch) {
+    return [];
+  }
+
+  const searchPattern = `%${normalizedSearch}%`;
+
+  function buildSearchQuery(column) {
+    let query = supabase
+      .from("profiles")
+      .select(PROFILE_SEARCH_FIELDS)
+      .ilike(column, searchPattern)
+      .order("full_name", { ascending: true })
+      .limit(20);
+
+    if (excludeUserId) {
+      query = query.neq("id", excludeUserId);
+    }
+
+    return query;
+  }
+
+  const results = await Promise.all([
+    buildSearchQuery("full_name"),
+    buildSearchQuery("employee_id"),
+    buildSearchQuery("email"),
+  ]);
+
+  const failedResult = results.find((result) => result.error);
+
+  if (failedResult?.error) {
+    console.error("searchProfiles Error:", failedResult.error);
+    throw failedResult.error;
+  }
+
+  const profilesById = new Map();
+
+  results.forEach((result) => {
+    (result.data || []).forEach((profile) => {
+      if (profile?.id && !profilesById.has(profile.id)) {
+        profilesById.set(profile.id, normalizeProfile(profile));
+      }
+    });
+  });
+
+  return Array.from(profilesById.values()).slice(0, 20);
 }
 
 export async function getProfileStats(userId, stories = null) {
@@ -633,6 +684,7 @@ export default {
   getProfileById,
   getProfileStats,
   saveProfile,
+  searchProfiles,
   updateProfileAvatar,
   uploadAvatar,
   uploadProfileAlbumImage,

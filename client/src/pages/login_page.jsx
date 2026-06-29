@@ -26,11 +26,11 @@ function LoginPage() {
   };
 
   return (
-    <div className="grid min-h-screen place-items-center bg-slate-950 px-4 py-10 text-slate-100">
-      <div className="w-full max-w-md rounded-[32px] border border-slate-800 bg-slate-900 p-8 shadow-xl shadow-slate-950/20">
+    <div className="grid min-h-screen place-items-center overflow-x-hidden bg-slate-950 px-3 py-6 text-slate-100 sm:px-4 sm:py-10">
+      <div className="w-full max-w-md rounded-[24px] border border-slate-800 bg-slate-900 p-5 shadow-xl shadow-slate-950/20 sm:rounded-[32px] sm:p-8">
         <div className="mb-6">
-          <p className="text-sm uppercase tracking-[0.28em] text-sky-400">Company network</p>
-          <h1 className="mt-3 text-3xl font-semibold">Sign in to your workspace</h1>
+          <p className="text-xs uppercase tracking-[0.24em] text-sky-400 sm:text-sm sm:tracking-[0.28em]">Company network</p>
+          <h1 className="mt-3 text-2xl font-semibold sm:text-3xl">Sign in to your workspace</h1>
           <p className="mt-2 text-sm text-slate-400">Connect with peers, share updates, and earn rewards.</p>
         </div>
 

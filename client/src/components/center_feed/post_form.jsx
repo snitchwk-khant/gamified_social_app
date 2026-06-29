@@ -96,7 +96,7 @@ function PostForm({ value, onChange, onSubmit }) {
 
   return (
     <div
-      className={`rounded-2xl border p-6 transition duration-300 ${
+      className={`rounded-2xl border p-4 transition duration-300 sm:p-6 ${
         isDark
           ? "border-slate-800 bg-slate-900 shadow-lg shadow-slate-950/10 hover:border-slate-700"
           : "border-slate-200 bg-white shadow-sm hover:border-slate-300"
@@ -138,7 +138,7 @@ function PostForm({ value, onChange, onSubmit }) {
         <p className={`mt-3 text-sm ${isDark ? "text-rose-400" : "text-rose-600"}`}>{error}</p>
       )}
 
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className={`flex flex-wrap items-center gap-4 text-sm ${isDark ? "text-slate-300" : "text-slate-700"}`}>
           <span className={`${isDark ? "text-slate-400" : "text-slate-500"}`}>Post as</span>
 
@@ -199,12 +199,12 @@ function PostForm({ value, onChange, onSubmit }) {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <button
             type="button"
             onClick={handleOpenImagePicker}
             disabled={publishing}
-            className={`rounded-full border px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 ${
+            className={`flex-1 rounded-full border px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 sm:flex-none ${
               isDark
                 ? "border-slate-700 bg-slate-950 text-slate-200 hover:bg-slate-800"
                 : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
@@ -217,7 +217,7 @@ function PostForm({ value, onChange, onSubmit }) {
             type="button"
             onClick={handleSubmit}
             disabled={publishing}
-            className={`rounded-full px-5 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 ${
+            className={`flex-1 rounded-full px-5 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 sm:flex-none ${
               isDark
                 ? "bg-sky-500 text-slate-950 hover:bg-sky-400"
                 : "bg-[#c446ff] text-white hover:bg-[#ad32e3]"

@@ -10,6 +10,48 @@ import StoryViewer from "../components/story/story_viewer";
 import { useTheme } from "../context/theme_context";
 import { supabase } from "../lib/supabase";
 
+const STORY_CARD_STEP_PX = 250;
+const STORY_TEXT_MAX_LENGTH = 300;
+const STORY_BACKGROUND_OPTIONS = [
+  {
+    id: "purple",
+    label: "Purple Gradient",
+    className: "from-fuchsia-500 via-purple-600 to-violet-700",
+  },
+  {
+    id: "pink",
+    label: "Pink Gradient",
+    className: "from-rose-400 via-fuchsia-500 to-pink-700",
+  },
+  {
+    id: "blue",
+    label: "Blue Gradient",
+    className: "from-sky-400 via-blue-600 to-indigo-800",
+  },
+  {
+    id: "orange",
+    label: "Orange Gradient",
+    className: "from-amber-300 via-orange-500 to-rose-600",
+  },
+  {
+    id: "green",
+    label: "Green Gradient",
+    className: "from-emerald-300 via-green-500 to-teal-800",
+  },
+  {
+    id: "dark",
+    label: "Dark Gradient",
+    className: "from-slate-900 via-purple-950 to-black",
+  },
+];
+
+function getStoryBackgroundClass(backgroundId) {
+  return (
+    STORY_BACKGROUND_OPTIONS.find((background) => background.id === backgroundId)?.className ||
+    STORY_BACKGROUND_OPTIONS[0].className
+  );
+}
+
 function sortStoriesByCreatedAt(stories) {
   return [...stories].sort(
     (leftStory, rightStory) => new Date(rightStory.created_at).getTime() - new Date(leftStory.created_at).getTime()
@@ -25,20 +67,26 @@ function upsertStoryCard(stories, nextStory) {
     return stories.filter((story) => story.id !== nextStory?.id);
   }
 
+  const existingStory = stories.find((story) => story.id === nextStory.id);
+  const storyToStore = {
+    ...nextStory,
+    view_count: Number(nextStory.view_count ?? existingStory?.view_count ?? 0),
+  };
+
   const existingSameUser = stories.find(
-    (story) => story.user_id === nextStory.user_id && story.id !== nextStory.id
+    (story) => story.user_id === storyToStore.user_id && story.id !== storyToStore.id
   );
 
   if (
     existingSameUser &&
-    new Date(existingSameUser.created_at).getTime() > new Date(nextStory.created_at).getTime()
+    new Date(existingSameUser.created_at).getTime() > new Date(storyToStore.created_at).getTime()
   ) {
-    return sortStoriesByCreatedAt(stories.filter((story) => story.id !== nextStory.id));
+    return sortStoriesByCreatedAt(stories.filter((story) => story.id !== storyToStore.id));
   }
 
   return sortStoriesByCreatedAt([
-    nextStory,
-    ...stories.filter((story) => story.id !== nextStory.id && story.user_id !== nextStory.user_id),
+    storyToStore,
+    ...stories.filter((story) => story.id !== storyToStore.id && story.user_id !== storyToStore.user_id),
   ]);
 }
 
@@ -72,8 +120,15 @@ function HomePage() {
   const [, setStoriesLoading] = useState(false);
   const [storiesError, setStoriesError] = useState("");
   const [storyUploading, setStoryUploading] = useState(false);
+  const [storyComposerOpen, setStoryComposerOpen] = useState(false);
+  const [storyComposerMode, setStoryComposerMode] = useState("text");
+  const [storyText, setStoryText] = useState("");
+  const [storyBackground, setStoryBackground] = useState("purple");
   const [storyViewerOpen, setStoryViewerOpen] = useState(false);
   const [storyViewerIndex, setStoryViewerIndex] = useState(0);
+  const [storyViewerStoryId, setStoryViewerStoryId] = useState(null);
+  const [storyViewerSession, setStoryViewerSession] = useState(0);
+  const [storyRailIndex, setStoryRailIndex] = useState(0);
 
   const loadStories = useCallback(async () => {
     const requestId = storiesRequestRef.current + 1;
@@ -244,6 +299,29 @@ function HomePage() {
         });
     });
 
+    const unsubscribeStoryViews = storiesService.subscribeToStoryViews((payload) => {
+      const storyId = payload?.new?.story_id;
+
+      if (!storyId) {
+        return;
+      }
+
+      storiesService.getStoryViewCount(storyId).then((viewCount) => {
+        setStories((prevStories) =>
+          prevStories.map((story) => {
+            if (story.id !== storyId || story.user_id !== user?.id) {
+              return story;
+            }
+
+            return {
+              ...story,
+              view_count: viewCount,
+            };
+          })
+        );
+      });
+    });
+
     const commentsChannel = supabase
       .channel("comments-post-counts")
       .on(
@@ -262,11 +340,47 @@ function HomePage() {
     return () => {
       if (typeof unsubscribe === "function") unsubscribe();
       if (typeof unsubscribeStories === "function") unsubscribeStories();
+      if (typeof unsubscribeStoryViews === "function") unsubscribeStoryViews();
       supabase.removeChannel(commentsChannel);
     };
   }, [loadAnnouncements, loadPosts, loadStories, user?.id]);
 
+  useEffect(() => {
+    setStoryRailIndex((currentIndex) => Math.min(currentIndex, stories.length));
+  }, [stories.length]);
+
   const handleOpenStoryPicker = () => {
+    setStoryComposerOpen(true);
+    setStoriesError("");
+  };
+
+  useEffect(() => {
+    const openStoryComposer = () => {
+      window.sessionStorage.removeItem("openStoryComposer");
+      setStoryComposerOpen(true);
+      setStoriesError("");
+    };
+
+    if (window.sessionStorage.getItem("openStoryComposer") === "true") {
+      openStoryComposer();
+    }
+
+    window.addEventListener("gemify:open-story-composer", openStoryComposer);
+
+    return () => {
+      window.removeEventListener("gemify:open-story-composer", openStoryComposer);
+    };
+  }, []);
+
+  const handleCloseStoryComposer = () => {
+    if (storyUploading) {
+      return;
+    }
+
+    setStoryComposerOpen(false);
+  };
+
+  const handleOpenStoryFilePicker = () => {
     storyInputRef.current?.click();
   };
 
@@ -290,12 +404,15 @@ function HomePage() {
 
       const { error: createError } = await storiesService.createStory({
         image_url: uploadData.publicUrl,
+        media_type: uploadData.mediaType || "image",
+        story_type: uploadData.mediaType || "image",
       });
 
       if (createError) {
         throw createError;
       }
 
+      setStoryComposerOpen(false);
     } catch (err) {
       console.error("Create Story Error:", err);
       setStoriesError(err?.message || "Unable to save story.");
@@ -305,9 +422,57 @@ function HomePage() {
     }
   };
 
-  const handleOpenStoryViewer = (index) => {
+  const handleCreateTextStory = async () => {
+    const trimmedText = storyText.trim();
+
+    if (!trimmedText) {
+      setStoriesError("Write something for your story.");
+      return;
+    }
+
+    if (trimmedText.length > STORY_TEXT_MAX_LENGTH) {
+      setStoriesError("Text stories must be 300 characters or less.");
+      return;
+    }
+
+    setStoryUploading(true);
+    setStoriesError("");
+
+    try {
+      const { error } = await storiesService.createStory({
+        story_type: "text",
+        background_color: storyBackground,
+        content: trimmedText,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      setStoryText("");
+      setStoryBackground("purple");
+      setStoryComposerOpen(false);
+    } catch (err) {
+      console.error("Create Text Story Error:", err);
+      setStoriesError(err?.message || "Unable to save story.");
+    } finally {
+      setStoryUploading(false);
+    }
+  };
+
+  const handleOpenStoryViewer = (index, storyId = null) => {
     setStoryViewerIndex(index);
+    setStoryViewerStoryId(storyId);
+    setStoryViewerSession((currentSession) => currentSession + 1);
     setStoryViewerOpen(true);
+  };
+
+  const handlePreviousStoryCard = () => {
+    setStoryRailIndex((currentIndex) => Math.max(currentIndex - 1, 0));
+  };
+
+  const handleNextStoryCard = () => {
+    setStoryRailIndex((currentIndex) => Math.min(currentIndex + 1, stories.length));
   };
 
   const handleCloseStoryViewer = () => {
@@ -391,8 +556,9 @@ function HomePage() {
   }, []);
 
   return (
-    <div className="flex h-full min-h-[calc(100vh-64px)] flex-col">
+    <div className="flex h-full min-h-[calc(100vh-64px)] min-w-0 flex-col">
       <section
+        id="stories-section"
         className={`mb-6 rounded-[1.5rem] border p-4 sm:p-5 ${
           isDark ? "border-slate-800 bg-slate-950/90" : "border-slate-200 bg-white"
         }`}
@@ -401,137 +567,325 @@ function HomePage() {
           <p className={`mb-3 text-sm ${isDark ? "text-rose-300" : "text-rose-700"}`}>{storiesError}</p>
         ) : null}
 
-        <div className="flex gap-5 overflow-x-auto pb-1">
+        <div className="relative overflow-hidden">
           <button
             type="button"
-            onClick={handleOpenStoryPicker}
-            disabled={storyUploading}
-            className="group flex w-[230px] shrink-0 flex-col rounded-[1.625rem] border border-dashed border-slate-300 bg-white p-5 text-left transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-70"
+            aria-label="Previous story card"
+            onClick={handlePreviousStoryCard}
+            disabled={storyRailIndex === 0}
+            className="absolute left-2 top-1/2 z-20 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-[rgba(40,20,80,.45)] text-sm font-bold text-white shadow-lg shadow-fuchsia-950/20 backdrop-blur-md transition hover:scale-105 hover:brightness-110 disabled:pointer-events-none disabled:opacity-30 sm:flex"
           >
-            <div className="flex min-h-[252px] flex-1 flex-col">
-              <div className="flex items-center gap-4">
-                <div
-                  className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-slate-300 bg-white text-[30px] font-light leading-none text-slate-900"
-                >
-                  +
-                </div>
-                <span className="text-xs font-medium uppercase tracking-[0.42em] text-[#c446ff]">
-                  MY STORY
-                </span>
-              </div>
-
-              <div className="mt-5 aspect-square w-full rounded-[18px] border border-dashed border-slate-300 bg-white" />
-            </div>
+            ◀
           </button>
 
-          {stories.map((story, index) => {
-            const fullName = story.profile?.full_name || story.author_name || "";
-            const avatarUrl = story.profile?.avatar_url ?? story.author_avatar ?? null;
-            const initials = fullName
-              ? fullName
-                  .split(/\s+/)
-                  .filter(Boolean)
-                  .slice(0, 2)
-                  .map((part) => part[0]?.toUpperCase())
-                  .join("")
-              : "";
+          <button
+            type="button"
+            aria-label="Next story card"
+            onClick={handleNextStoryCard}
+            disabled={storyRailIndex >= stories.length}
+            className="absolute right-2 top-1/2 z-20 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-[rgba(40,20,80,.45)] text-sm font-bold text-white shadow-lg shadow-fuchsia-950/20 backdrop-blur-md transition hover:scale-105 hover:brightness-110 disabled:pointer-events-none disabled:opacity-30 sm:flex"
+          >
+            ▶
+          </button>
 
-            const profilePath = story.user_id ? `/profile/${story.user_id}` : null;
-            const isStoryOwner = Boolean(user?.id && story.user_id === user.id);
+          <div
+            className="flex snap-x gap-4 overflow-x-auto scroll-smooth pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-5 sm:overflow-visible sm:transition-transform sm:duration-300 sm:ease-out sm:[transform:translateX(var(--story-offset))]"
+            style={{ "--story-offset": `-${storyRailIndex * STORY_CARD_STEP_PX}px` }}
+          >
+            <button
+              type="button"
+              onClick={handleOpenStoryPicker}
+              disabled={storyUploading}
+              className="group flex w-[min(72vw,230px)] shrink-0 snap-start flex-col rounded-[1.625rem] border border-dashed border-slate-300 bg-white p-4 text-left transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-70 sm:w-[230px] sm:p-5"
+            >
+              <div className="flex min-h-[220px] flex-1 flex-col sm:min-h-[252px]">
+                <div className="flex items-center gap-4">
+                  <div
+                    className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-slate-300 bg-white text-[30px] font-light leading-none text-slate-900"
+                  >
+                    +
+                  </div>
+                  <span className="text-xs font-medium uppercase tracking-[0.42em] text-[#c446ff]">
+                    MY STORY
+                  </span>
+                </div>
 
-            return (
-              <article
-                key={story.id}
-                className="flex w-[230px] shrink-0 flex-col rounded-[1.5rem] border border-slate-200 bg-white p-5 text-slate-900 shadow-[0_14px_30px_rgba(15,23,42,0.06)]"
-              >
-                <div className="flex items-center gap-3.5">
-                  {profilePath ? (
-                    <Link to={profilePath} aria-label={`Open ${fullName || "user"} profile`} className="shrink-0">
-                      {avatarUrl ? (
-                        <img
-                          src={avatarUrl}
-                          alt={fullName || "Story avatar"}
-                          className="h-11 w-11 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div
-                          className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700"
-                        >
-                          {initials || "U"}
-                        </div>
-                      )}
-                    </Link>
-                  ) : avatarUrl ? (
-                    <img
-                      src={avatarUrl}
-                      alt={fullName || "Story avatar"}
-                      className="h-11 w-11 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div
-                      className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700"
-                    >
-                      {initials || "U"}
-                    </div>
-                  )}
+                <div className="mt-5 aspect-square w-full rounded-[18px] border border-dashed border-slate-300 bg-white" />
+              </div>
+            </button>
 
-                  <div className="min-w-0 flex-1">
+            {stories.map((story, index) => {
+              const fullName = story.profile?.full_name || story.author_name || "";
+              const avatarUrl = story.profile?.avatar_url ?? story.author_avatar ?? null;
+              const initials = fullName
+                ? fullName
+                    .split(/\s+/)
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .map((part) => part[0]?.toUpperCase())
+                    .join("")
+                : "";
+
+              const profilePath = story.user_id ? `/profile/${story.user_id}` : null;
+              const isStoryOwner = Boolean(user?.id && story.user_id === user.id);
+
+              return (
+                <article
+                  key={story.id}
+                  className="flex w-[min(72vw,230px)] shrink-0 snap-start flex-col rounded-[1.5rem] border border-slate-200 bg-white p-4 text-slate-900 shadow-[0_14px_30px_rgba(15,23,42,0.06)] sm:w-[230px] sm:p-5"
+                >
+                  <div className="flex items-center gap-3.5">
                     {profilePath ? (
-                      <Link
-                        to={profilePath}
-                        className="block truncate text-sm font-bold text-slate-900 transition hover:text-slate-700"
-                      >
-                        {fullName}
+                      <Link to={profilePath} aria-label={`Open ${fullName || "user"} profile`} className="shrink-0">
+                        {avatarUrl ? (
+                          <img
+                            src={avatarUrl}
+                            alt={fullName || "Story avatar"}
+                            className="h-11 w-11 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div
+                            className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700"
+                          >
+                            {initials || "U"}
+                          </div>
+                        )}
                       </Link>
+                    ) : avatarUrl ? (
+                      <img
+                        src={avatarUrl}
+                        alt={fullName || "Story avatar"}
+                        className="h-11 w-11 rounded-full object-cover"
+                      />
                     ) : (
-                      <p className="truncate text-sm font-bold text-slate-900">{fullName}</p>
+                      <div
+                        className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700"
+                      >
+                        {initials || "U"}
+                      </div>
                     )}
+
+                    <div className="min-w-0 flex-1">
+                      {profilePath ? (
+                        <Link
+                          to={profilePath}
+                          className="block truncate text-sm font-bold text-slate-900 transition hover:text-slate-700"
+                        >
+                          {fullName}
+                        </Link>
+                      ) : (
+                        <p className="truncate text-sm font-bold text-slate-900">{fullName}</p>
+                      )}
+                    </div>
+
+                    {isStoryOwner ? (
+                      <button
+                        type="button"
+                        aria-label="Delete story"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          handleDeleteStory(story.id);
+                        }}
+                        className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
+                      >
+                        Delete
+                      </button>
+                    ) : null}
                   </div>
 
-                  {isStoryOwner ? (
-                    <button
-                      type="button"
-                      aria-label="Delete story"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        handleDeleteStory(story.id);
-                      }}
-                      className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
-                    >
-                      Delete
-                    </button>
-                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => handleOpenStoryViewer(index, story.id)}
+                    className="mt-[18px] block text-left"
+                  >
+                    <div className="overflow-hidden rounded-[18px]">
+                      {story.story_type === "text" ? (
+                        <div
+                          className={`flex aspect-square w-full items-center justify-center bg-gradient-to-br p-4 text-center ${getStoryBackgroundClass(
+                            story.background_color
+                          )}`}
+                        >
+                          <p className="max-h-full overflow-hidden break-words text-xl font-bold leading-tight text-white">
+                            {story.content}
+                          </p>
+                        </div>
+                      ) : story.image_url ? (
+                        story.media_type === "video" ? (
+                          <video
+                            src={story.image_url}
+                            muted
+                            playsInline
+                            preload="metadata"
+                            className="aspect-square w-full object-cover"
+                          />
+                        ) : (
+                          <img
+                            src={story.image_url}
+                            alt={`${fullName || "Story"}'s story`}
+                            className="aspect-square w-full object-cover"
+                          />
+                        )
+                      ) : (
+                        <div className="flex aspect-square w-full items-center justify-center bg-slate-100 text-sm text-slate-500">
+                          No image
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+
+        {storyComposerOpen ? (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-slate-950/75 px-3 py-4 backdrop-blur-sm sm:px-4 sm:py-6">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Create story"
+              className="max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-[1.5rem] border border-white/20 bg-white p-4 text-slate-900 shadow-2xl shadow-purple-950/30 sm:max-h-[calc(100vh-3rem)] sm:p-6"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#c446ff]">My Story</p>
+                  <h2 className="mt-1 text-xl font-bold text-slate-950">Create story</h2>
                 </div>
 
                 <button
                   type="button"
-                  onClick={() => handleOpenStoryViewer(index)}
-                  className="mt-[18px] block text-left"
+                  onClick={handleCloseStoryComposer}
+                  disabled={storyUploading}
+                  className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  <div className="overflow-hidden rounded-[18px]">
-                    {story.image_url ? (
-                      <img
-                        src={story.image_url}
-                        alt={`${fullName || "Story"}'s story`}
-                        className="aspect-square w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex aspect-square w-full items-center justify-center bg-slate-100 text-sm text-slate-500">
-                        No image
-                      </div>
-                    )}
-                  </div>
+                  Close
                 </button>
-              </article>
-            );
-          })}
-        </div>
+              </div>
+
+              <div className="mt-5 grid grid-cols-3 gap-1 rounded-2xl bg-slate-100 p-1 sm:gap-2 sm:rounded-full">
+                {[
+                  ["text", "📝 Text"],
+                  ["photo", "📷 Photo"],
+                  ["video", "🎥 Video"],
+                ].map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => {
+                      setStoryComposerMode(mode);
+                      setStoriesError("");
+                    }}
+                    className={`rounded-full px-2 py-2 text-xs font-semibold transition sm:px-3 sm:text-sm ${
+                      storyComposerMode === mode
+                        ? "bg-gradient-to-r from-fuchsia-500 to-violet-600 text-white shadow-lg shadow-fuchsia-950/20"
+                        : "text-slate-600 hover:bg-white"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {storiesError ? (
+                <p className="mt-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+                  {storiesError}
+                </p>
+              ) : null}
+
+              {storyComposerMode === "text" ? (
+                <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_260px]">
+                  <div className="space-y-4">
+                    <label className="block">
+                      <span className="text-sm font-semibold text-slate-700">Text</span>
+                      <textarea
+                        value={storyText}
+                        onChange={(event) => setStoryText(event.target.value.slice(0, STORY_TEXT_MAX_LENGTH))}
+                        maxLength={STORY_TEXT_MAX_LENGTH}
+                        rows={7}
+                        className="mt-2 w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-fuchsia-400 focus:ring-4 focus:ring-fuchsia-100"
+                        placeholder="Share a quick update..."
+                      />
+                    </label>
+
+                    <div className="flex items-center justify-between gap-3 text-xs font-semibold text-slate-500">
+                      <span>{storyText.length}/{STORY_TEXT_MAX_LENGTH}</span>
+                      <span>1 character minimum</span>
+                    </div>
+
+                    <div>
+                      <p className="text-sm font-semibold text-slate-700">Background</p>
+                      <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
+                        {STORY_BACKGROUND_OPTIONS.map((background) => (
+                          <button
+                            key={background.id}
+                            type="button"
+                            aria-label={background.label}
+                            title={background.label}
+                            onClick={() => setStoryBackground(background.id)}
+                            className={`h-11 rounded-full bg-gradient-to-br ${background.className} ${
+                              storyBackground === background.id
+                                ? "ring-4 ring-fuchsia-200 ring-offset-2"
+                                : "ring-1 ring-slate-200"
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleCreateTextStory}
+                      disabled={storyUploading || storyText.trim().length === 0}
+                      className="w-full rounded-full bg-gradient-to-r from-fuchsia-500 to-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-fuchsia-950/20 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {storyUploading ? "Publishing..." : "Publish Story"}
+                    </button>
+                  </div>
+
+                  <div
+                    className={`flex min-h-[220px] items-center justify-center rounded-[1.5rem] bg-gradient-to-br p-5 text-center shadow-inner sm:min-h-[260px] ${getStoryBackgroundClass(
+                      storyBackground
+                    )}`}
+                  >
+                    <p className="max-h-full overflow-hidden break-words text-2xl font-bold leading-tight text-white sm:text-3xl">
+                      {storyText.trim() || "Your story"}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-5 rounded-[1.5rem] border border-dashed border-slate-300 p-6 text-center">
+                  <p className="text-sm font-semibold text-slate-700">
+                    {storyComposerMode === "photo" ? "Choose a photo story" : "Choose a video story"}
+                  </p>
+                  <p className="mt-2 text-xs text-slate-500">
+                    {storyComposerMode === "photo"
+                      ? "JPG, JPEG, PNG, or WEBP. Maximum 25 MB."
+                      : "MP4, MOV, or WebM. Maximum 45 seconds and 25 MB."}
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={handleOpenStoryFilePicker}
+                    disabled={storyUploading}
+                    className="mt-5 rounded-full bg-gradient-to-r from-fuchsia-500 to-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-fuchsia-950/20 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {storyUploading ? "Uploading..." : storyComposerMode === "photo" ? "Select Photo" : "Select Video"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null}
 
         <input
           ref={storyInputRef}
           type="file"
-          accept="image/*"
+          accept={
+            storyComposerMode === "video"
+              ? "video/mp4,video/quicktime,video/webm"
+              : "image/jpeg,image/png,image/webp"
+          }
           className="hidden"
           onChange={handleStoryFileChange}
         />
@@ -551,9 +905,12 @@ function HomePage() {
       />
 
       <StoryViewer
+        key={storyViewerSession}
         isOpen={storyViewerOpen}
         stories={stories}
         initialIndex={storyViewerIndex}
+        initialStoryId={storyViewerStoryId}
+        currentUserId={user?.id || ""}
         onClose={handleCloseStoryViewer}
       />
     </div>

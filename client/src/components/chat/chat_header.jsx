@@ -1,7 +1,9 @@
 import { useTheme } from "../../context/theme_context";
+import { useNavigate } from "react-router-dom";
 
-function ChatHeader({ title, status }) {
+function ChatHeader({ isOnline = false, showBackButton = false }) {
   const { isDark } = useTheme();
+  const navigate = useNavigate();
 
   return (
     <div
@@ -12,19 +14,32 @@ function ChatHeader({ title, status }) {
       }`}
     >
       <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="text-sm uppercase tracking-[0.28em] text-slate-500">{status}</p>
-          <h2 className={`mt-1 text-xl font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
-            {title}
+        <div className="flex min-w-0 items-center gap-3">
+          {showBackButton ? (
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              aria-label="Go back"
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-2xl leading-none transition active:scale-95 ${
+                isDark ? "text-slate-100 hover:bg-slate-900" : "text-slate-800 hover:bg-slate-100"
+              }`}
+            >
+              ←
+            </button>
+          ) : null}
+          <h2 className="truncate bg-gradient-to-r from-[#c446ff] to-violet-600 bg-clip-text text-xl font-bold tracking-[0.04em] text-transparent">
+            Gemify Room
           </h2>
         </div>
-        <span
-          className={`rounded-full px-3 py-1 text-xs font-semibold ${
-            isDark ? "bg-emerald-500 text-slate-950" : "bg-emerald-100 text-emerald-700"
-          }`}
-        >
-          Online
-        </span>
+        {isOnline ? (
+          <span
+            className={`rounded-full px-3 py-1 text-xs font-semibold ${
+              isDark ? "bg-emerald-500 text-slate-950" : "bg-emerald-100 text-emerald-700"
+            }`}
+          >
+            Online
+          </span>
+        ) : null}
       </div>
     </div>
   );

@@ -44,7 +44,7 @@ const ZODIAC_OPTIONS = [
 function ProfilePage() {
   const { userId: routeUserId } = useParams();
   const { user, refreshUserProfile } = useAuth();
-  const { isDark } = useTheme();
+  const { isDark, toggleTheme } = useTheme();
   const avatarInputRef = useRef(null);
   const albumInputRef = useRef(null);
   const profileUserId = routeUserId || user?.id || "";
@@ -387,7 +387,7 @@ function ProfilePage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-5 sm:space-y-6">
       {error ? (
         <div className={`rounded-2xl border p-4 text-sm ${isDark ? "border-rose-900 bg-rose-950/40 text-rose-200" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
           {error}
@@ -403,12 +403,12 @@ function ProfilePage() {
       {profile ? (
         <>
           <section
-            className={`rounded-2xl border p-6 ${
+            className={`rounded-2xl border p-4 sm:p-6 ${
               isDark ? "border-slate-800 bg-slate-900 shadow-xl" : "border-slate-200 bg-white shadow-sm"
             }`}
           >
             <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex min-w-0 flex-col gap-5 sm:flex-row sm:items-center">
+              <div className="flex min-w-0 flex-col items-center gap-5 text-center sm:flex-row sm:items-center sm:text-left">
                 <button
                   type="button"
                   onClick={handleOpenAvatarPicker}
@@ -433,8 +433,8 @@ function ProfilePage() {
                   ) : null}
                 </button>
 
-                <div className="min-w-0">
-                  <h2 className={`truncate text-3xl font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
+                <div className="min-w-0 max-w-full">
+                  <h2 className={`break-words text-2xl font-semibold sm:truncate sm:text-3xl ${isDark ? "text-slate-100" : "text-slate-900"}`}>
                     {displayName}
                   </h2>
                   {profile.relationship_status ? (
@@ -449,14 +449,14 @@ function ProfilePage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 sm:min-w-[240px]">
+              <div className="grid w-full grid-cols-2 gap-3 sm:min-w-[240px] lg:w-auto">
                 <StatCard label="Posts" value={stats.postsCount} />
                 <StatCard label="Stories" value={stats.storiesCount} />
               </div>
             </div>
 
             {isOwnProfile ? (
-              <div className="mt-6 flex justify-end">
+              <div className="mt-6 flex justify-center sm:justify-end">
                 <button
                   type="button"
                   onClick={() => setEditing((current) => !current)}
@@ -484,7 +484,7 @@ function ProfilePage() {
 
           {musicUrl ? (
             <section
-              className={`rounded-2xl border p-6 ${
+              className={`rounded-2xl border p-4 sm:p-6 ${
                 isDark ? "border-slate-800 bg-slate-900 shadow-xl" : "border-slate-200 bg-white shadow-sm"
               }`}
             >
@@ -506,7 +506,7 @@ function ProfilePage() {
           ) : null}
 
           <section
-            className={`rounded-2xl border p-6 ${
+            className={`rounded-2xl border p-4 sm:p-6 ${
               isDark ? "border-slate-800 bg-slate-900 shadow-xl" : "border-slate-200 bg-white shadow-sm"
             }`}
           >
@@ -520,7 +520,7 @@ function ProfilePage() {
           </section>
 
           <section
-            className={`rounded-2xl border p-6 text-center ${
+            className={`rounded-2xl border p-4 text-center sm:p-6 ${
               isDark ? "border-slate-800 bg-slate-900 shadow-xl" : "border-slate-200 bg-white shadow-sm"
             }`}
           >
@@ -533,11 +533,11 @@ function ProfilePage() {
           </section>
 
           <section
-            className={`rounded-2xl border p-6 ${
+            className={`rounded-2xl border p-4 sm:p-6 ${
               isDark ? "border-slate-800 bg-slate-900 shadow-xl" : "border-slate-200 bg-white shadow-sm"
             }`}
           >
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:grid-cols-3">
               {albumImages.map((albumImage, index) => (
                 <div key={albumImage.id} className="relative aspect-square">
                   <button
@@ -587,9 +587,48 @@ function ProfilePage() {
             />
           </section>
 
+          {isOwnProfile ? (
+            <div className="flex justify-center">
+              <div
+                className={`w-full max-w-md rounded-full border p-1 shadow-lg backdrop-blur-md ${
+                  isDark
+                    ? "border-sky-500/30 bg-slate-900/85 shadow-slate-950/30"
+                    : "border-[#c446ff]/30 bg-white/90 shadow-slate-200/70"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={toggleTheme}
+                  aria-pressed={isDark}
+                  className="relative flex h-12 w-full items-center rounded-full"
+                >
+                  <span
+                    className={`absolute h-10 w-[calc(50%-0.25rem)] rounded-full bg-gradient-to-r from-[#c446ff] to-violet-600 shadow-lg shadow-fuchsia-950/20 transition-transform ${
+                      isDark ? "translate-x-full" : "translate-x-0"
+                    }`}
+                  />
+                  <span
+                    className={`relative z-10 flex flex-1 items-center justify-center gap-2 text-sm font-semibold transition ${
+                      isDark ? "text-slate-400" : "text-white"
+                    }`}
+                  >
+                    ☀️ Light Mode
+                  </span>
+                  <span
+                    className={`relative z-10 flex flex-1 items-center justify-center gap-2 text-sm font-semibold transition ${
+                      isDark ? "text-white" : "text-slate-500"
+                    }`}
+                  >
+                    🌙 Dark Mode
+                  </span>
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           {isOwnProfile && editing ? (
             <section
-              className={`rounded-2xl border p-6 ${
+              className={`rounded-2xl border p-4 sm:p-6 ${
                 isDark ? "border-slate-800 bg-slate-900 shadow-xl" : "border-slate-200 bg-white shadow-sm"
               }`}
             >
@@ -632,12 +671,12 @@ function ProfilePage() {
                 <p className="mt-2 text-xs text-slate-500">{form.bio.length}/300 characters</p>
               </div>
 
-              <div className="mt-6 flex justify-end">
+              <div className="mt-6 flex justify-center sm:justify-end">
                 <button
                   type="button"
                   disabled={saving}
                   onClick={handleSave}
-                  className={`inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 ${
+                  className={`inline-flex w-full items-center justify-center rounded-full px-6 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto ${
                     isDark
                       ? "bg-sky-500 text-slate-950 hover:bg-sky-400"
                       : "bg-[#c446ff] text-white hover:bg-[#ad32e3]"

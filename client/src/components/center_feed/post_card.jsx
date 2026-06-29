@@ -221,11 +221,11 @@ function PostCard({
 
   return (
     <article
-      className={`rounded-2xl border p-6 ${
+      className={`rounded-2xl border p-4 sm:p-6 ${
         isDark ? "border-slate-800 bg-slate-900 shadow-xl" : "border-slate-200 bg-white shadow-sm"
       }`}
     >
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
         <div className="flex items-center gap-3 min-w-0">
           {(() => {
             const displayName = profile?.full_name || authorName || "";
@@ -322,7 +322,7 @@ function PostCard({
         </div>
       ) : null}
 
-      <div className="mt-5 flex items-center gap-4">
+      <div className="mt-5 flex flex-wrap items-center gap-3 sm:gap-4">
         <button
           onClick={() => setCommentOpen(!commentOpen)}
           className={`rounded-full px-4 py-2 text-sm font-medium transition ${
@@ -343,7 +343,7 @@ function PostCard({
             type="button"
             onClick={handleDeletePost}
             disabled={deleting}
-            className={`ml-auto rounded-full px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-70 ${
+            className={`ml-0 rounded-full px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-70 sm:ml-auto ${
               isDark
                 ? "bg-slate-800 text-rose-200 hover:bg-rose-950"
                 : "bg-rose-50 text-rose-700 hover:bg-rose-100"
@@ -362,7 +362,7 @@ function PostCard({
 
       {commentOpen && (
         <div
-          className={`mt-5 rounded-2xl border p-5 ${
+          className={`mt-5 rounded-2xl border p-3 sm:p-5 ${
             isDark ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-slate-50"
           }`}
         >

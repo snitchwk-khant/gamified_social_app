@@ -5,18 +5,18 @@ function FeedHeader({ subtitle }) {
 
   return (
     <div
-      className={`mb-5 flex flex-col gap-2 rounded-2xl border p-6 ${
+      className={`mb-5 flex flex-col gap-2 rounded-2xl border p-4 sm:p-6 ${
         isDark
           ? "border-slate-800 bg-slate-950/90 shadow-lg shadow-slate-950/20"
           : "border-slate-200 bg-white shadow-sm"
       }`}
     >
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
         <div>
           <p className="text-xs uppercase tracking-[0.32em] text-slate-500">{subtitle}</p>
         </div>
         <div
-          className={`rounded-full px-4 py-2 text-sm font-medium ${
+          className={`rounded-full px-3 py-1.5 text-xs font-medium sm:px-4 sm:py-2 sm:text-sm ${
             isDark ? "bg-slate-900 text-slate-300" : "bg-[#f6e8ff] text-[#c446ff]"
           }`}
         >

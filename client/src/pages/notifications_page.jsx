@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTheme } from "../context/theme_context";
+import ChatWidget from "../components/chat/chat_widget";
 import {
   getMyNotificationsResult,
   markNotificationRead,
@@ -15,6 +16,9 @@ function formatNotificationTime(value) {
 
 function NotificationsPage() {
   const { isDark } = useTheme();
+  const [isMobileChatView, setIsMobileChatView] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(max-width: 767px)").matches : false
+  );
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -38,8 +42,24 @@ function NotificationsPage() {
   }, []);
 
   useEffect(() => {
-    loadNotifications();
-  }, [loadNotifications]);
+    const mediaQuery = window.matchMedia("(max-width: 767px)");
+    const updateMobileView = () => {
+      setIsMobileChatView(mediaQuery.matches);
+    };
+
+    updateMobileView();
+    mediaQuery.addEventListener("change", updateMobileView);
+
+    return () => {
+      mediaQuery.removeEventListener("change", updateMobileView);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isMobileChatView) {
+      loadNotifications();
+    }
+  }, [isMobileChatView, loadNotifications]);
 
   const handleMarkRead = async (id) => {
     if (!id) {
@@ -65,16 +85,24 @@ function NotificationsPage() {
     }));
   };
 
+  if (isMobileChatView) {
+    return (
+      <div className={`fixed inset-0 z-[70] h-[100dvh] ${isDark ? "bg-slate-950" : "bg-[#f0f2f5]"}`}>
+        <ChatWidget fullScreen />
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-5 sm:space-y-6">
       <div
-        className={`rounded-2xl border p-6 ${
+        className={`rounded-2xl border p-4 sm:p-6 ${
           isDark ? "border-slate-800 bg-slate-900 shadow-xl" : "border-slate-200 bg-white shadow-sm"
         }`}
       >
         <div>
-          <p className="text-sm uppercase tracking-[0.28em] text-slate-500">Notifications</p>
-          <h2 className={`mt-2 text-2xl font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
+          <p className="text-xs uppercase tracking-[0.24em] text-slate-500 sm:text-sm sm:tracking-[0.28em]">Notifications</p>
+          <h2 className={`mt-2 text-xl font-semibold sm:text-2xl ${isDark ? "text-slate-100" : "text-slate-900"}`}>
             What’s happening today
           </h2>
         </div>
@@ -82,7 +110,7 @@ function NotificationsPage() {
 
       {loading ? (
         <div
-          className={`rounded-2xl border p-6 text-sm ${
+          className={`rounded-2xl border p-4 text-sm sm:p-6 ${
             isDark ? "border-slate-800 bg-slate-950 text-slate-300" : "border-slate-200 bg-white text-slate-600"
           }`}
         >
@@ -92,7 +120,7 @@ function NotificationsPage() {
 
       {!loading && error ? (
         <div
-          className={`rounded-2xl border p-6 ${
+          className={`rounded-2xl border p-4 sm:p-6 ${
             isDark ? "border-rose-900 bg-rose-950/30 text-rose-200" : "border-rose-200 bg-rose-50 text-rose-700"
           }`}
         >
@@ -113,7 +141,7 @@ function NotificationsPage() {
 
       {!loading && !error && notifications.length === 0 ? (
         <div
-          className={`rounded-2xl border p-6 text-sm ${
+          className={`rounded-2xl border p-4 text-sm sm:p-6 ${
             isDark ? "border-slate-800 bg-slate-950 text-slate-300" : "border-slate-200 bg-white text-slate-600"
           }`}
         >
@@ -126,13 +154,13 @@ function NotificationsPage() {
           {notifications.map((item) => (
           <div
             key={item.id}
-            className={`rounded-2xl border p-5 shadow-sm ${
+            className={`rounded-2xl border p-4 shadow-sm sm:p-5 ${
               isDark
                 ? "border-slate-800 bg-slate-950 text-slate-200 shadow-slate-950/20"
                 : "border-slate-200 bg-white text-slate-700"
             }`}
           >
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <div className="min-w-0">
                 <h3 className={`text-lg font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
                   {item.title || "Notification"}
@@ -141,7 +169,7 @@ function NotificationsPage() {
                   {(item.type || "general").toString().replaceAll("_", " ")}
                 </p>
               </div>
-              <span className="text-xs uppercase tracking-[0.24em] text-slate-500">
+              <span className="break-words text-xs uppercase tracking-[0.18em] text-slate-500 sm:tracking-[0.24em]">
                 {formatNotificationTime(item.created_at)}
               </span>
             </div>
@@ -149,7 +177,7 @@ function NotificationsPage() {
               {item.body || "No details provided."}
             </p>
 
-            <div className="mt-4 flex items-center justify-between gap-3">
+            <div className="mt-4 flex flex-col gap-3 min-[360px]:flex-row min-[360px]:items-center min-[360px]:justify-between">
               <span
                 className={`rounded-full border px-3 py-1 text-xs uppercase tracking-[0.2em] ${
                   item.is_read
