@@ -10,6 +10,52 @@ import StoryViewer from "../components/story/story_viewer";
 import { useTheme } from "../context/theme_context";
 import { supabase } from "../lib/supabase";
 
+function sortStoriesByCreatedAt(stories) {
+  return [...stories].sort(
+    (leftStory, rightStory) => new Date(rightStory.created_at).getTime() - new Date(leftStory.created_at).getTime()
+  );
+}
+
+function isActiveStory(story) {
+  return !story?.expires_at || new Date(story.expires_at).getTime() > Date.now();
+}
+
+function upsertStoryCard(stories, nextStory) {
+  if (!nextStory?.id || !isActiveStory(nextStory)) {
+    return stories.filter((story) => story.id !== nextStory?.id);
+  }
+
+  const existingSameUser = stories.find(
+    (story) => story.user_id === nextStory.user_id && story.id !== nextStory.id
+  );
+
+  if (
+    existingSameUser &&
+    new Date(existingSameUser.created_at).getTime() > new Date(nextStory.created_at).getTime()
+  ) {
+    return sortStoriesByCreatedAt(stories.filter((story) => story.id !== nextStory.id));
+  }
+
+  return sortStoriesByCreatedAt([
+    nextStory,
+    ...stories.filter((story) => story.id !== nextStory.id && story.user_id !== nextStory.user_id),
+  ]);
+}
+
+function getLatestStoryCards(stories) {
+  return sortStoriesByCreatedAt(stories).reduce((latestStories, story) => {
+    if (!story?.user_id) {
+      return [...latestStories, story];
+    }
+
+    if (latestStories.some((item) => item.user_id === story.user_id)) {
+      return latestStories;
+    }
+
+    return [...latestStories, story];
+  }, []);
+}
+
 function HomePage() {
   const { user } = useAuth();
   const { isDark } = useTheme();
@@ -41,7 +87,7 @@ function HomePage() {
       if (storiesRequestRef.current !== requestId) {
         return;
       }
-      setStories(formatted);
+      setStories(getLatestStoryCards(formatted));
     } catch (err) {
       if (storiesRequestRef.current !== requestId) {
         return;
@@ -162,55 +208,40 @@ function HomePage() {
     });
 
     const unsubscribeStories = storiesService.subscribeToStories((payload) => {
-      if (!payload?.new?.id) {
+      if (!payload?.eventType) {
         return;
       }
 
-      if (payload.eventType === "INSERT" && payload.new.user_id === user?.id) {
+      if (payload.eventType === "DELETE") {
+        const deletedStoryId = payload.old?.id;
+
+        if (!deletedStoryId) {
+          return;
+        }
+
+        setStories((prevStories) => prevStories.filter((story) => story.id !== deletedStoryId));
         return;
       }
 
-      setStories((prevStories) => {
-        const existingIndex = prevStories.findIndex((story) => story.id === payload.new.id);
+      if (!payload.new?.id) {
+        return;
+      }
 
-        if (payload.eventType === "INSERT" && existingIndex !== -1) {
-          return prevStories;
-        }
+      const immediateStory = storiesService.formatStoryRow(payload.new);
+      setStories((prevStories) => upsertStoryCard(prevStories, immediateStory));
 
-        const nextStory = {
-          id: payload.new.id,
-          user_id: payload.new.user_id || null,
-          author_name: payload.new.author_name || payload.new.profile?.full_name || payload.new.user_id || "",
-          author_avatar: payload.new.author_avatar || payload.new.profile?.avatar_url || null,
-          profile: payload.new.profile
-            ? {
-                id: payload.new.profile.id || payload.new.user_id || null,
-                full_name: payload.new.profile.full_name || payload.new.author_name || "",
-                avatar_url: payload.new.profile.avatar_url || null,
-              }
-            : null,
-          image_url: payload.new.image_url || payload.new.media_url || null,
-          content: payload.new.content || payload.new.caption || "",
-          created_at: payload.new.created_at || new Date().toISOString(),
-          created_at_label: payload.new.created_at
-            ? new Date(payload.new.created_at).toLocaleString()
-            : new Date().toLocaleString(),
-          expires_at: payload.new.expires_at || null,
-          updated_at: payload.new.updated_at || payload.new.created_at || new Date().toISOString(),
-        };
+      storiesService
+        .formatRealtimeStory(payload.new)
+        .then((nextStory) => {
+          if (!nextStory) {
+            return;
+          }
 
-        if (existingIndex !== -1) {
-          const updatedStories = [...prevStories];
-          updatedStories[existingIndex] = nextStory;
-          return updatedStories.sort(
-            (leftStory, rightStory) => new Date(rightStory.created_at).getTime() - new Date(leftStory.created_at).getTime()
-          );
-        }
-
-        return [nextStory, ...prevStories].sort(
-          (leftStory, rightStory) => new Date(rightStory.created_at).getTime() - new Date(leftStory.created_at).getTime()
-        );
-      });
+          setStories((prevStories) => upsertStoryCard(prevStories, nextStory));
+        })
+        .catch((err) => {
+          console.error("Story realtime format error:", err);
+        });
     });
 
     const commentsChannel = supabase
@@ -265,7 +296,6 @@ function HomePage() {
         throw createError;
       }
 
-      await loadStories();
     } catch (err) {
       console.error("Create Story Error:", err);
       setStoriesError(err?.message || "Unable to save story.");
@@ -282,6 +312,20 @@ function HomePage() {
 
   const handleCloseStoryViewer = () => {
     setStoryViewerOpen(false);
+  };
+
+  const handleDeleteStory = async (storyId) => {
+    if (!storyId) {
+      return;
+    }
+
+    setStoriesError("");
+
+    const { error } = await storiesService.deleteStory(storyId);
+
+    if (error) {
+      setStoriesError(error?.message || "Unable to delete story.");
+    }
   };
 
   const handlePublish = async (content, isAnonymous = false, imageFile = null) => {
@@ -393,6 +437,7 @@ function HomePage() {
               : "";
 
             const profilePath = story.user_id ? `/profile/${story.user_id}` : null;
+            const isStoryOwner = Boolean(user?.id && story.user_id === user.id);
 
             return (
               <article
@@ -442,6 +487,21 @@ function HomePage() {
                       <p className="truncate text-sm font-bold text-slate-900">{fullName}</p>
                     )}
                   </div>
+
+                  {isStoryOwner ? (
+                    <button
+                      type="button"
+                      aria-label="Delete story"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        handleDeleteStory(story.id);
+                      }}
+                      className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
+                    >
+                      Delete
+                    </button>
+                  ) : null}
                 </div>
 
                 <button

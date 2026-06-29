@@ -98,29 +98,54 @@ export async function getStories() {
     }
   }
 
-  return storyRows.map((story) => {
-    const profile = profilesById[story.user_id] || null;
-    const emailPrefix = profile?.email?.split("@")[0] || "";
-    const authorName = profile?.full_name || emailPrefix || "";
+  return storyRows.map((story) => formatStoryRow(story, profilesById[story.user_id] || null));
+}
 
-    return {
-      id: story.id,
-      user_id: story.user_id,
-      author_name: authorName,
-      author_avatar: profile?.avatar_url || null,
-      profile: {
-        id: profile?.id || story.user_id,
-        full_name: profile?.full_name || authorName,
-        avatar_url: profile?.avatar_url || null,
-      },
-      image_url: story.media_url || null,
-      content: story.caption || "",
-      created_at: story.created_at,
-      created_at_label: new Date(story.created_at).toLocaleString(),
-      expires_at: story.expires_at,
-      updated_at: story.updated_at,
-    };
-  });
+export function formatStoryRow(story, profile = null) {
+  const emailPrefix = profile?.email?.split("@")[0] || "";
+  const authorName = profile?.full_name || emailPrefix || story?.user_id || "";
+
+  return {
+    id: story.id,
+    user_id: story.user_id,
+    author_name: authorName,
+    author_avatar: profile?.avatar_url || null,
+    profile: {
+      id: profile?.id || story.user_id,
+      full_name: profile?.full_name || authorName,
+      avatar_url: profile?.avatar_url || null,
+    },
+    image_url: story.media_url || story.image_url || null,
+    content: story.caption || story.content || "",
+    created_at: story.created_at,
+    created_at_label: story.created_at ? new Date(story.created_at).toLocaleString() : "Just now",
+    expires_at: story.expires_at || null,
+    updated_at: story.updated_at || story.created_at || new Date().toISOString(),
+  };
+}
+
+export async function formatRealtimeStory(story) {
+  if (!story?.id) {
+    return null;
+  }
+
+  let profile = null;
+
+  if (story.user_id) {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, full_name, email, avatar_url")
+      .eq("id", story.user_id)
+      .maybeSingle();
+
+    if (error) {
+      console.error("formatRealtimeStory Profile Error:", error);
+    } else {
+      profile = data || null;
+    }
+  }
+
+  return formatStoryRow(story, profile);
 }
 
 function isActiveStory(story) {
@@ -223,6 +248,8 @@ export function subscribeToStories(onPayload) {
 export default {
   getStories,
   countActiveStoriesByUserId,
+  formatRealtimeStory,
+  formatStoryRow,
   getActiveStoryCountByUserId,
   uploadStoryImage,
   createStory,

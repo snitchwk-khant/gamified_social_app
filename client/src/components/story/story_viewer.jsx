@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 const AUTO_ADVANCE_MS = 5000;
@@ -37,15 +37,61 @@ function getInitials(name) {
 function StoryViewer({ isOpen, stories = [], initialIndex = 0, onClose }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [progress, setProgress] = useState(0);
+  const activeStoryIdRef = useRef(null);
+  const initializedViewerRef = useRef(false);
+  const initialIndexRef = useRef(initialIndex);
 
   useEffect(() => {
+    if (!isOpen) {
+      initializedViewerRef.current = false;
+      return;
+    }
+
     if (!isOpen || stories.length === 0) {
       return;
     }
 
-    setActiveIndex(clampIndex(initialIndex, stories.length));
+    if (initializedViewerRef.current && initialIndexRef.current === initialIndex) {
+      return;
+    }
+
+    const nextIndex = clampIndex(initialIndex, stories.length);
+    activeStoryIdRef.current = stories[nextIndex]?.id || null;
+    initializedViewerRef.current = true;
+    initialIndexRef.current = initialIndex;
+    setActiveIndex(nextIndex);
     setProgress(0);
-  }, [initialIndex, isOpen, stories.length]);
+  }, [initialIndex, isOpen, stories]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    if (stories.length === 0) {
+      activeStoryIdRef.current = null;
+      if (typeof onClose === "function") {
+        onClose();
+      }
+      return;
+    }
+
+    setActiveIndex((currentIndex) => {
+      const activeStoryId = activeStoryIdRef.current;
+
+      if (activeStoryId) {
+        const nextIndex = stories.findIndex((story) => story.id === activeStoryId);
+
+        if (nextIndex !== -1) {
+          return nextIndex;
+        }
+      }
+
+      const nextIndex = clampIndex(currentIndex, stories.length);
+      activeStoryIdRef.current = stories[nextIndex]?.id || null;
+      return nextIndex;
+    });
+  }, [isOpen, onClose, stories]);
 
   useEffect(() => {
     if (!isOpen || stories.length === 0) {
@@ -70,7 +116,9 @@ function StoryViewer({ isOpen, stories = [], initialIndex = 0, onClose }) {
             return prev;
           }
 
-          return prev + 1;
+          const nextIndex = prev + 1;
+          activeStoryIdRef.current = stories[nextIndex]?.id || null;
+          return nextIndex;
         });
         return;
       }
@@ -83,7 +131,7 @@ function StoryViewer({ isOpen, stories = [], initialIndex = 0, onClose }) {
     return () => {
       cancelAnimationFrame(frameId);
     };
-  }, [activeIndex, isOpen, onClose, stories.length]);
+  }, [activeIndex, isOpen, onClose, stories]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -101,7 +149,11 @@ function StoryViewer({ isOpen, stories = [], initialIndex = 0, onClose }) {
 
       if (event.key === "ArrowLeft") {
         event.preventDefault();
-        setActiveIndex((prev) => Math.max(prev - 1, 0));
+        setActiveIndex((prev) => {
+          const nextIndex = Math.max(prev - 1, 0);
+          activeStoryIdRef.current = stories[nextIndex]?.id || null;
+          return nextIndex;
+        });
         setProgress(0);
         return;
       }
@@ -115,7 +167,9 @@ function StoryViewer({ isOpen, stories = [], initialIndex = 0, onClose }) {
             }
             return prev;
           }
-          return prev + 1;
+          const nextIndex = prev + 1;
+          activeStoryIdRef.current = stories[nextIndex]?.id || null;
+          return nextIndex;
         });
         setProgress(0);
       }
@@ -126,13 +180,21 @@ function StoryViewer({ isOpen, stories = [], initialIndex = 0, onClose }) {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isOpen, onClose, stories.length]);
+  }, [isOpen, onClose, stories]);
 
   const activeStory = stories[activeIndex] || null;
   const profile = activeStory?.profile || null;
   const displayName = profile?.full_name || activeStory?.author_name || "";
   const avatarUrl = profile?.avatar_url ?? activeStory?.author_avatar ?? null;
   const profilePath = activeStory?.user_id ? `/profile/${activeStory.user_id}` : null;
+
+  useEffect(() => {
+    if (!isOpen || !activeStory?.id) {
+      return;
+    }
+
+    activeStoryIdRef.current = activeStory.id;
+  }, [activeStory?.id, isOpen]);
 
   const progressSegments = useMemo(() => {
     return stories.map((story, index) => {
@@ -153,7 +215,11 @@ function StoryViewer({ isOpen, stories = [], initialIndex = 0, onClose }) {
   }
 
   const handlePrevious = () => {
-    setActiveIndex((prev) => Math.max(prev - 1, 0));
+    setActiveIndex((prev) => {
+      const nextIndex = Math.max(prev - 1, 0);
+      activeStoryIdRef.current = stories[nextIndex]?.id || null;
+      return nextIndex;
+    });
     setProgress(0);
   };
 
@@ -166,7 +232,9 @@ function StoryViewer({ isOpen, stories = [], initialIndex = 0, onClose }) {
         return prev;
       }
 
-      return prev + 1;
+      const nextIndex = prev + 1;
+      activeStoryIdRef.current = stories[nextIndex]?.id || null;
+      return nextIndex;
     });
     setProgress(0);
   };
