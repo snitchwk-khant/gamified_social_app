@@ -45,6 +45,7 @@ function FeedWidget({
   announcementsLoading = false,
   announcementsError = "",
   onRetryAnnouncements,
+  onDeletePost,
 }) {
   const { isDark } = useTheme();
   const visibleAnnouncements = announcements.filter((item) => {
@@ -132,7 +133,7 @@ function FeedWidget({
       ) : null}
 
       <PostForm value={draft} onChange={onDraftChange} onSubmit={onPublish} />
-      <FeedPanel posts={posts} onCommentCreated={onCommentCreated} />
+      <FeedPanel posts={posts} onCommentCreated={onCommentCreated} onDeletePost={onDeletePost} />
     </div>
   );
 }

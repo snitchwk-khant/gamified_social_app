@@ -9,6 +9,7 @@ import {
   getProfileById,
   getProfileStats,
   saveProfile,
+  updateProfileAvatar,
   uploadProfileAlbumImage,
 } from "../services/profile_service";
 
@@ -44,6 +45,7 @@ function ProfilePage() {
   const { userId: routeUserId } = useParams();
   const { user, refreshUserProfile } = useAuth();
   const { isDark } = useTheme();
+  const avatarInputRef = useRef(null);
   const albumInputRef = useRef(null);
   const profileUserId = routeUserId || user?.id || "";
   const isOwnProfile = Boolean(user?.id && profileUserId === user.id);
@@ -56,6 +58,7 @@ function ProfilePage() {
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const [albumUploading, setAlbumUploading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -194,6 +197,41 @@ function ProfilePage() {
       setError("Unable to save profile. Please try again.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleOpenAvatarPicker = () => {
+    if (!isOwnProfile || avatarUploading) {
+      return;
+    }
+
+    avatarInputRef.current?.click();
+  };
+
+  const handleAvatarFileChange = async (event) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0] || null;
+
+    if (!file || !isOwnProfile || !user?.id) {
+      return;
+    }
+
+    setAvatarUploading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const savedProfile = await updateProfileAvatar(user.id, file, profile?.avatar_url || "");
+
+      setProfile(savedProfile);
+      await refreshUserProfile(savedProfile);
+      setSuccess("Profile picture updated.");
+    } catch (err) {
+      console.error("Profile Avatar Upload Error:", err);
+      setError(err?.message || "Unable to update profile picture. Please try again.");
+    } finally {
+      input.value = "";
+      setAvatarUploading(false);
     }
   };
 
@@ -371,19 +409,29 @@ function ProfilePage() {
           >
             <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex min-w-0 flex-col gap-5 sm:flex-row sm:items-center">
-                <div
-                  className={`h-28 w-28 shrink-0 overflow-hidden rounded-full border ${
+                <button
+                  type="button"
+                  onClick={handleOpenAvatarPicker}
+                  disabled={!isOwnProfile || avatarUploading}
+                  aria-label={isOwnProfile ? "Upload profile picture" : `${displayName} profile picture`}
+                  className={`group relative h-28 w-28 shrink-0 overflow-hidden rounded-full border transition ${
                     isDark ? "border-slate-700 bg-slate-800" : "border-slate-200 bg-slate-100"
-                  }`}
+                  } ${isOwnProfile ? "cursor-pointer hover:opacity-95" : "cursor-default"} disabled:cursor-not-allowed`}
                 >
                   {profile.avatar_url ? (
                     <img src={profile.avatar_url} alt={displayName} className="h-full w-full object-cover" />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center text-3xl font-semibold text-slate-500">
+                    <span className="flex h-full w-full items-center justify-center text-3xl font-semibold text-slate-500">
                       {initials}
-                    </div>
+                    </span>
                   )}
-                </div>
+
+                  {isOwnProfile ? (
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/55 px-3 text-center text-xs font-semibold text-white opacity-0 transition group-hover:opacity-100 group-disabled:opacity-100">
+                      {avatarUploading ? "Uploading..." : "Change photo"}
+                    </span>
+                  ) : null}
+                </button>
 
                 <div className="min-w-0">
                   <h2 className={`truncate text-3xl font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
@@ -421,6 +469,16 @@ function ProfilePage() {
                   {editing ? "View Profile" : "Edit Profile"}
                 </button>
               </div>
+            ) : null}
+
+            {isOwnProfile ? (
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handleAvatarFileChange}
+              />
             ) : null}
           </section>
 

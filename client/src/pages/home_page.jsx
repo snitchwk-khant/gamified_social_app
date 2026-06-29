@@ -107,6 +107,52 @@ function HomePage() {
   }, [announcementsEnabled, user?.role]);
 
   useEffect(() => {
+    if (!user?.id) {
+      return;
+    }
+
+    const avatarUrl = user.avatar_url || null;
+
+    setPosts((prevPosts) =>
+      prevPosts.map((post) => {
+        if (post.user_id !== user.id) {
+          return post;
+        }
+
+        return {
+          ...post,
+          author_avatar: avatarUrl,
+          profile: post.profile
+            ? {
+                ...post.profile,
+                avatar_url: avatarUrl,
+              }
+            : post.profile,
+        };
+      })
+    );
+
+    setStories((prevStories) =>
+      prevStories.map((story) => {
+        if (story.user_id !== user.id) {
+          return story;
+        }
+
+        return {
+          ...story,
+          author_avatar: avatarUrl,
+          profile: story.profile
+            ? {
+                ...story.profile,
+                avatar_url: avatarUrl,
+              }
+            : story.profile,
+        };
+      })
+    );
+  }, [user?.avatar_url, user?.id]);
+
+  useEffect(() => {
     loadPosts();
     loadAnnouncements();
     loadStories();
@@ -238,12 +284,15 @@ function HomePage() {
     setStoryViewerOpen(false);
   };
 
-  const handlePublish = async (content, isAnonymous = false) => {
+  const handlePublish = async (content, isAnonymous = false, imageFile = null) => {
     const trimmedContent = content?.trim();
-    if (!trimmedContent) return false;
+    if (!trimmedContent && !imageFile) {
+      return { success: false, error: "Write something or add an image to publish." };
+    }
 
     const { error } = await postService.createPost({
       content: trimmedContent,
+      imageFile,
       isAnonymous,
     });
 
@@ -255,13 +304,28 @@ function HomePage() {
         hint: error.hint,
         error,
       });
-      return false;
+      return { success: false, error: error?.message || "Unable to publish post." };
     }
 
     setDraft("");
     await loadPosts();
-    return true;
+    return { success: true };
   };
+
+  const handleDeletePost = useCallback(
+    async (postId, imageUrl = "") => {
+      const { error } = await postService.deletePost(postId, imageUrl);
+
+      if (error) {
+        console.error("Delete Post Error:", error);
+        return false;
+      }
+
+      setPosts((prevPosts) => prevPosts.filter((post) => post.id !== postId));
+      return true;
+    },
+    []
+  );
 
   const handlePostCommentCreated = useCallback((postId) => {
     if (!postId) {
@@ -423,6 +487,7 @@ function HomePage() {
         announcementsLoading={announcementsEnabled ? announcementsLoading : false}
         announcementsError={announcementsEnabled ? announcementsError : ""}
         onRetryAnnouncements={loadAnnouncements}
+        onDeletePost={handleDeletePost}
       />
 
       <StoryViewer

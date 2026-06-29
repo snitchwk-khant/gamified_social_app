@@ -15,8 +15,10 @@ function PostCard({
   authorUserId = null,
   authorName = "",
   authorAvatar = null,
+  imageUrl = null,
   profile = null,
   onCommentCreated,
+  onDeletePost,
 }) {
   const { user } = useAuth();
   const { isDark } = useTheme();
@@ -25,11 +27,40 @@ function PostCard({
   const [commentOpen, setCommentOpen] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
   const [commentCount, setCommentCount] = useState(commentsCount);
+  const [deleting, setDeleting] = useState(false);
   const maskedAvatarPath = "/masked-avatar.jpg";
+  const canDelete = Boolean(user?.id && authorUserId === user.id);
 
   useEffect(() => {
     setCommentCount(commentsCount);
   }, [commentsCount, id]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      return;
+    }
+
+    const avatarUrl = user.avatar_url || null;
+
+    setComments((currentComments) =>
+      currentComments.map((comment) => {
+        if (comment.is_anonymous || comment.user_id !== user.id) {
+          return comment;
+        }
+
+        return {
+          ...comment,
+          author_avatar: avatarUrl,
+          profile: comment.profile
+            ? {
+                ...comment.profile,
+                avatar_url: avatarUrl,
+              }
+            : comment.profile,
+        };
+      })
+    );
+  }, [user?.avatar_url, user?.id]);
 
   async function loadComments() {
     setLoadingComments(true);
@@ -162,6 +193,20 @@ function PostCard({
     return true;
   }
 
+  async function handleDeletePost() {
+    if (!canDelete || deleting || typeof onDeletePost !== "function") {
+      return;
+    }
+
+    setDeleting(true);
+    const success = await onDeletePost(id, imageUrl);
+    setDeleting(false);
+
+    if (success === false) {
+      console.error("Post delete failed.");
+    }
+  }
+
   return (
     <article
       className={`rounded-2xl border p-6 ${
@@ -248,9 +293,22 @@ function PostCard({
         </span>
       </div>
 
-      <p className={`mt-4 whitespace-pre-wrap ${isDark ? "text-slate-300" : "text-slate-700"}`}>
-        {body}
-      </p>
+      {body ? (
+        <p className={`mt-4 whitespace-pre-wrap ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+          {body}
+        </p>
+      ) : null}
+
+      {imageUrl ? (
+        <div className="mt-4 overflow-hidden rounded-2xl">
+          <img
+            src={imageUrl}
+            alt="Post attachment"
+            loading="lazy"
+            className="max-h-[520px] w-full object-contain"
+          />
+        </div>
+      ) : null}
 
       <div className="mt-5 flex items-center gap-4">
         <button
@@ -267,6 +325,21 @@ function PostCard({
         <span className={`text-sm ${isDark ? "text-slate-400" : "text-slate-500"}`}>
           {commentCount} Comments
         </span>
+
+        {canDelete ? (
+          <button
+            type="button"
+            onClick={handleDeletePost}
+            disabled={deleting}
+            className={`ml-auto rounded-full px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-70 ${
+              isDark
+                ? "bg-slate-800 text-rose-200 hover:bg-rose-950"
+                : "bg-rose-50 text-rose-700 hover:bg-rose-100"
+            }`}
+          >
+            {deleting ? "Deleting..." : "Delete"}
+          </button>
+        ) : null}
       </div>
 
       {commentOpen && (

@@ -1,29 +1,97 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTheme } from "../../context/theme_context";
 import { useAuth } from "../../context/auth_context";
 
+const MAX_POST_IMAGE_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const POST_IMAGE_ALLOWED_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"]);
+const POST_IMAGE_ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
 function PostForm({ value, onChange, onSubmit }) {
   const [isAnonymous, setIsAnonymous] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState("");
+  const imageInputRef = useRef(null);
   const { isDark } = useTheme();
   const { user } = useAuth();
 
   const adminDisplayName = user?.full_name || user?.name || "Administrator";
   const adminInitial = (adminDisplayName?.charAt(0) || "A").toUpperCase();
 
+  useEffect(() => {
+    if (!selectedImage) {
+      setPreviewUrl("");
+      return undefined;
+    }
+
+    const nextPreviewUrl = URL.createObjectURL(selectedImage);
+    setPreviewUrl(nextPreviewUrl);
+
+    return () => {
+      URL.revokeObjectURL(nextPreviewUrl);
+    };
+  }, [selectedImage]);
+
   const handleSubmit = async () => {
     const trimmedValue = value?.trim();
-    if (!trimmedValue) {
-      setError("Post cannot be empty");
+
+    if (!trimmedValue && !selectedImage) {
+      setError("Write something or add an image to publish.");
       return;
     }
 
     setError("");
-    const success = await onSubmit(trimmedValue, isAnonymous);
+    setPublishing(true);
 
-    if (success === false) {
-      setError("Something went wrong. Please try again.");
+    try {
+      const result = await onSubmit(trimmedValue, isAnonymous, selectedImage);
+
+      if (result === false || result?.success === false) {
+        setError(result?.error || "Something went wrong. Please try again.");
+      } else {
+        setSelectedImage(null);
+      }
+    } catch (submitError) {
+      setError(submitError?.message || "Something went wrong. Please try again.");
+    } finally {
+      setPublishing(false);
     }
+  };
+
+  const handleOpenImagePicker = () => {
+    if (publishing) {
+      return;
+    }
+
+    imageInputRef.current?.click();
+  };
+
+  const handleImageChange = (event) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0] || null;
+
+    if (!file) {
+      return;
+    }
+
+    const validationMessage = validatePostImage(file);
+
+    if (validationMessage) {
+      setError(validationMessage);
+      setSelectedImage(null);
+      input.value = "";
+      return;
+    }
+
+    setError("");
+    setSelectedImage(file);
+    input.value = "";
+  };
+
+  const handleRemoveImage = () => {
+    setSelectedImage(null);
+    setError("");
   };
 
   return (
@@ -45,6 +113,26 @@ function PostForm({ value, onChange, onSubmit }) {
             : "border-slate-300 bg-slate-50 text-slate-800 focus:border-[#c446ff] focus:bg-white"
         }`}
       />
+
+      {previewUrl ? (
+        <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+          <div className="relative">
+            <img
+              src={previewUrl}
+              alt="Selected post preview"
+              className="max-h-[360px] w-full object-contain"
+            />
+            <button
+              type="button"
+              onClick={handleRemoveImage}
+              disabled={publishing}
+              className="absolute right-3 top-3 rounded-full bg-black/70 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              Remove
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {error && (
         <p className={`mt-3 text-sm ${isDark ? "text-rose-400" : "text-rose-600"}`}>{error}</p>
@@ -111,20 +199,62 @@ function PostForm({ value, onChange, onSubmit }) {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleSubmit}
-          className={`rounded-full px-5 py-3 text-sm font-semibold transition ${
-            isDark
-              ? "bg-sky-500 text-slate-950 hover:bg-sky-400"
-              : "bg-[#c446ff] text-white hover:bg-[#ad32e3]"
-          }`}
-        >
-          Publish
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleOpenImagePicker}
+            disabled={publishing}
+            className={`rounded-full border px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 ${
+              isDark
+                ? "border-slate-700 bg-slate-950 text-slate-200 hover:bg-slate-800"
+                : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            Image
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={publishing}
+            className={`rounded-full px-5 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 ${
+              isDark
+                ? "bg-sky-500 text-slate-950 hover:bg-sky-400"
+                : "bg-[#c446ff] text-white hover:bg-[#ad32e3]"
+            }`}
+          >
+            {publishing ? "Publishing..." : "Publish"}
+          </button>
+        </div>
       </div>
+
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={handleImageChange}
+      />
     </div>
   );
+}
+
+function validatePostImage(file) {
+  if (file.size > MAX_POST_IMAGE_FILE_SIZE_BYTES) {
+    return "Post image must be 5 MB or smaller.";
+  }
+
+  const extension = (file.name.split(".").pop() || "").toLowerCase();
+
+  if (!POST_IMAGE_ALLOWED_EXTENSIONS.has(extension)) {
+    return "Post image must be JPG, JPEG, PNG, or WEBP.";
+  }
+
+  if (file.type && !POST_IMAGE_ALLOWED_TYPES.has(file.type)) {
+    return "Post image must be JPG, JPEG, PNG, or WEBP.";
+  }
+
+  return "";
 }
 
 export default PostForm;

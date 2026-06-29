@@ -1,5 +1,9 @@
 import { supabase } from "../lib/supabase";
 
+const MAX_POST_IMAGE_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const POST_IMAGE_ALLOWED_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"]);
+const POST_IMAGE_ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
 export async function getPosts() {
   const { data: postsData, error } = await supabase
     .from("posts")
@@ -70,6 +74,7 @@ export async function getPosts() {
       date: new Date(post.created_at).toLocaleString(),
       comments_count: commentCountsByPostId[post.id] ?? post.comments_count ?? 0,
       is_anonymous: Boolean(post.is_anonymous),
+      image_url: post.image_url || null,
       author_name: authorName,
       author_avatar: profile?.avatar_url || null,
       profile: {
@@ -83,8 +88,12 @@ export async function getPosts() {
   return formatted;
 }
 
-export async function createPost({ content, imageUrl = null, isAnonymous = false }) {
-  if (!content?.trim()) return { data: null, error: new Error("Empty content") };
+export async function createPost({ content = "", imageFile = null, imageUrl = null, isAnonymous = false }) {
+  const trimmedContent = content?.trim() || "";
+
+  if (!trimmedContent && !imageFile && !imageUrl) {
+    return { data: null, error: new Error("Write something or add an image to publish.") };
+  }
 
   const {
     data: { user },
@@ -97,18 +106,34 @@ export async function createPost({ content, imageUrl = null, isAnonymous = false
     return { data: null, error };
   }
 
+  let uploadedImageUrl = imageUrl || null;
+
+  if (imageFile) {
+    const { data: uploadData, error: uploadError } = await uploadPostImage(user.id, imageFile);
+
+    if (uploadError || !uploadData?.publicUrl) {
+      return { data: null, error: uploadError || new Error("Unable to upload image.") };
+    }
+
+    uploadedImageUrl = uploadData.publicUrl;
+  }
+
   const { data, error } = await supabase
     .from("posts")
     .insert({
       user_id: user.id,
-      content: content.trim(),
-      image_url: imageUrl || null,
+      content: trimmedContent,
+      image_url: uploadedImageUrl,
       is_anonymous: Boolean(isAnonymous),
     })
     .select()
     .single();
 
   if (error) {
+    if (uploadedImageUrl && imageFile) {
+      await deletePostImage(uploadedImageUrl, user.id);
+    }
+
     console.error("createPost Insert Error:", {
       code: error.code,
       message: error.message,
@@ -119,6 +144,141 @@ export async function createPost({ content, imageUrl = null, isAnonymous = false
   }
 
   return { data, error };
+}
+
+export async function uploadPostImage(userId, file) {
+  if (!userId) {
+    return { data: null, error: new Error("No authenticated user found.") };
+  }
+
+  try {
+    const extension = validatePostImageFile(file);
+    const filePath = `${userId}/${Date.now()}.${extension}`;
+    const { error } = await supabase.storage
+      .from("post-images")
+      .upload(filePath, file, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: file.type,
+      });
+
+    if (error) {
+      console.error("Post image upload failed:", error);
+      return { data: null, error };
+    }
+
+    const { data: publicUrlData } = supabase.storage.from("post-images").getPublicUrl(filePath);
+    const publicUrl = publicUrlData?.publicUrl || null;
+
+    if (!publicUrl) {
+      await supabase.storage.from("post-images").remove([filePath]);
+      return { data: null, error: new Error("Unable to create image URL.") };
+    }
+
+    return { data: { path: filePath, publicUrl }, error: null };
+  } catch (error) {
+    return { data: null, error };
+  }
+}
+
+export async function deletePost(postId, imageUrl = "") {
+  if (!postId) {
+    return { error: new Error("Missing post ID.") };
+  }
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user?.id) {
+    const error = authError || new Error("No authenticated user found.");
+    console.error("deletePost Auth Error:", error);
+    return { error };
+  }
+
+  const { error } = await supabase
+    .from("posts")
+    .delete()
+    .eq("id", postId)
+    .eq("user_id", user.id);
+
+  if (error) {
+    console.error("deletePost Error:", error);
+    return { error };
+  }
+
+  const imageDeleteError = await deletePostImage(imageUrl, user.id);
+
+  if (imageDeleteError) {
+    return { error: imageDeleteError };
+  }
+
+  return { error: null };
+}
+
+async function deletePostImage(imageUrl, userId) {
+  const storagePath = getPostImageStoragePath(imageUrl, userId);
+
+  if (!storagePath) {
+    return null;
+  }
+
+  const { error } = await supabase.storage.from("post-images").remove([storagePath]);
+
+  if (error) {
+    console.error("Post image delete failed:", error);
+  }
+
+  return error || null;
+}
+
+function validatePostImageFile(file) {
+  if (!file) {
+    throw new Error("Choose an image to upload.");
+  }
+
+  if (file.size > MAX_POST_IMAGE_FILE_SIZE_BYTES) {
+    throw new Error("Post image must be 5 MB or smaller.");
+  }
+
+  const extension = (file.name.split(".").pop() || "").toLowerCase();
+
+  if (!POST_IMAGE_ALLOWED_EXTENSIONS.has(extension)) {
+    throw new Error("Post image must be JPG, JPEG, PNG, or WEBP.");
+  }
+
+  if (file.type && !POST_IMAGE_ALLOWED_TYPES.has(file.type)) {
+    throw new Error("Post image must be JPG, JPEG, PNG, or WEBP.");
+  }
+
+  return extension;
+}
+
+function getPostImageStoragePath(imageUrl, userId) {
+  if (!imageUrl || !userId) {
+    return "";
+  }
+
+  try {
+    const url = new URL(imageUrl);
+    const marker = "/storage/v1/object/public/post-images/";
+    const markerIndex = url.pathname.indexOf(marker);
+
+    if (markerIndex === -1) {
+      return "";
+    }
+
+    const storagePath = decodeURIComponent(url.pathname.slice(markerIndex + marker.length));
+
+    if (!storagePath.startsWith(`${userId}/`)) {
+      return "";
+    }
+
+    return storagePath;
+  } catch {
+    return "";
+  }
 }
 
 export function subscribeToPosts(onPayload) {
@@ -145,5 +305,7 @@ export function subscribeToPosts(onPayload) {
 export default {
   getPosts,
   createPost,
+  deletePost,
   subscribeToPosts,
+  uploadPostImage,
 };

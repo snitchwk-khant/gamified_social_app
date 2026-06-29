@@ -28,6 +28,9 @@ export function formatSkillsForDisplay(skills) {
 }
 
 const MAX_PROFILE_ALBUM_IMAGES = 6;
+const MAX_AVATAR_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const AVATAR_ALLOWED_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"]);
+const AVATAR_ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 function normalizeSkillsForStorage(skillsValue) {
   return formatSkillsForDisplay(skillsValue)
@@ -228,7 +231,7 @@ export async function uploadAvatar(userId, file) {
     return null;
   }
 
-  const extension = file.name.split(".").pop();
+  const extension = validateAvatarFile(file);
   const timestamp = Date.now();
   const filePath = `${userId}/avatar-${timestamp}.${extension}`;
 
@@ -237,6 +240,7 @@ export async function uploadAvatar(userId, file) {
     .upload(filePath, file, {
       cacheControl: "3600",
       upsert: true,
+      contentType: file.type,
     });
 
   if (uploadError) {
@@ -254,6 +258,65 @@ export async function uploadAvatar(userId, file) {
   }
 
   return publicUrlData?.publicUrl || null;
+}
+
+export async function updateProfileAvatar(userId, file, previousAvatarUrl = "") {
+  if (!userId) {
+    throw new Error("Missing user ID");
+  }
+
+  const extension = validateAvatarFile(file);
+  const timestamp = Date.now();
+  const filePath = `${userId}/avatar-${timestamp}.${extension}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from("avatars")
+    .upload(filePath, file, {
+      cacheControl: "3600",
+      upsert: true,
+      contentType: file.type,
+    });
+
+  if (uploadError) {
+    console.error("Avatar upload failed:", uploadError);
+    throw uploadError;
+  }
+
+  const { data: publicUrlData } = supabase.storage.from("avatars").getPublicUrl(filePath);
+  const publicUrl = publicUrlData?.publicUrl || null;
+
+  if (!publicUrl) {
+    await supabase.storage.from("avatars").remove([filePath]);
+    throw new Error("Unable to create avatar URL.");
+  }
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .update({
+      avatar_url: publicUrl,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", userId)
+    .select(PROFILE_FIELDS)
+    .single();
+
+  if (error) {
+    await supabase.storage.from("avatars").remove([filePath]);
+    console.error("Avatar profile update failed:", error);
+    throw error;
+  }
+
+  const previousStoragePath = getAvatarStoragePath(previousAvatarUrl, userId);
+
+  if (previousStoragePath && previousStoragePath !== filePath) {
+    const { error: removeError } = await supabase.storage.from("avatars").remove([previousStoragePath]);
+
+    if (removeError) {
+      console.error("Previous avatar delete failed:", removeError);
+    }
+  }
+
+  return normalizeProfile(data);
 }
 
 export async function uploadProfileAlbumImage(userId, file) {
@@ -391,15 +454,65 @@ function getProfileAlbumStoragePath(imageUrl) {
   }
 }
 
+function validateAvatarFile(file) {
+  if (!file) {
+    throw new Error("Choose an image to upload.");
+  }
+
+  if (file.size > MAX_AVATAR_FILE_SIZE_BYTES) {
+    throw new Error("Profile picture must be 5 MB or smaller.");
+  }
+
+  const extension = (file.name.split(".").pop() || "").toLowerCase();
+
+  if (!AVATAR_ALLOWED_EXTENSIONS.has(extension)) {
+    throw new Error("Profile picture must be JPG, JPEG, PNG, or WEBP.");
+  }
+
+  if (file.type && !AVATAR_ALLOWED_TYPES.has(file.type)) {
+    throw new Error("Profile picture must be JPG, JPEG, PNG, or WEBP.");
+  }
+
+  return extension;
+}
+
+function getAvatarStoragePath(imageUrl, userId) {
+  if (!imageUrl || !userId) {
+    return "";
+  }
+
+  try {
+    const url = new URL(imageUrl);
+    const marker = "/storage/v1/object/public/avatars/";
+    const markerIndex = url.pathname.indexOf(marker);
+
+    if (markerIndex === -1) {
+      return "";
+    }
+
+    const storagePath = decodeURIComponent(url.pathname.slice(markerIndex + marker.length));
+
+    if (!storagePath.startsWith(`${userId}/avatar-`)) {
+      return "";
+    }
+
+    return storagePath;
+  } catch {
+    return "";
+  }
+}
+
 export async function saveProfile(userId, profileData, avatarFile) {
   if (!userId) {
     throw new Error("Missing user ID");
   }
 
   let avatar_url = profileData.avatar_url;
+  let uploadedAvatarUrl = "";
 
   if (avatarFile) {
     avatar_url = await uploadAvatar(userId, avatarFile);
+    uploadedAvatarUrl = avatar_url;
   }
 
   const skills = normalizeSkillsForStorage(profileData.skills);
@@ -428,6 +541,14 @@ export async function saveProfile(userId, profileData, avatarFile) {
     .maybeSingle();
 
   if (error) {
+    if (uploadedAvatarUrl) {
+      const uploadedStoragePath = getAvatarStoragePath(uploadedAvatarUrl, userId);
+
+      if (uploadedStoragePath) {
+        await supabase.storage.from("avatars").remove([uploadedStoragePath]);
+      }
+    }
+
     console.error("saveProfile Error:", {
       code: error.code,
       message: error.message,
@@ -461,11 +582,45 @@ export async function saveProfile(userId, profileData, avatarFile) {
       .single();
 
     if (insertError) {
+      if (uploadedAvatarUrl) {
+        const uploadedStoragePath = getAvatarStoragePath(uploadedAvatarUrl, userId);
+
+        if (uploadedStoragePath) {
+          await supabase.storage.from("avatars").remove([uploadedStoragePath]);
+        }
+      }
+
       console.error("saveProfile Insert Error:", insertError);
       throw insertError;
     }
 
+    if (uploadedAvatarUrl) {
+      const previousStoragePath = getAvatarStoragePath(profileData.avatar_url, userId);
+      const uploadedStoragePath = getAvatarStoragePath(uploadedAvatarUrl, userId);
+
+      if (previousStoragePath && previousStoragePath !== uploadedStoragePath) {
+        const { error: removeError } = await supabase.storage.from("avatars").remove([previousStoragePath]);
+
+        if (removeError) {
+          console.error("Previous avatar delete failed:", removeError);
+        }
+      }
+    }
+
     return normalizeProfile(insertedProfile);
+  }
+
+  if (uploadedAvatarUrl) {
+    const previousStoragePath = getAvatarStoragePath(profileData.avatar_url, userId);
+    const uploadedStoragePath = getAvatarStoragePath(uploadedAvatarUrl, userId);
+
+    if (previousStoragePath && previousStoragePath !== uploadedStoragePath) {
+      const { error: removeError } = await supabase.storage.from("avatars").remove([previousStoragePath]);
+
+      if (removeError) {
+        console.error("Previous avatar delete failed:", removeError);
+      }
+    }
   }
 
   return normalizeProfile(data);
@@ -478,6 +633,7 @@ export default {
   getProfileById,
   getProfileStats,
   saveProfile,
+  updateProfileAvatar,
   uploadAvatar,
   uploadProfileAlbumImage,
 };

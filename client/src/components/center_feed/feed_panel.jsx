@@ -1,6 +1,6 @@
 import PostCard from "./post_card";
 
-function FeedPanel({ posts, onCommentCreated }) {
+function FeedPanel({ posts, onCommentCreated, onDeletePost }) {
   return (
     <div className="space-y-6">
       {posts.map((post) => (
@@ -14,8 +14,10 @@ function FeedPanel({ posts, onCommentCreated }) {
           authorUserId={post.user_id}
           authorName={post.author_name}
           authorAvatar={post.author_avatar}
+          imageUrl={post.image_url}
           profile={post.profile}
           onCommentCreated={onCommentCreated}
+          onDeletePost={onDeletePost}
         />
       ))}
     </div>
