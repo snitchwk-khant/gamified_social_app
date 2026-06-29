@@ -28,6 +28,7 @@ function PostCard({
   const [loadingComments, setLoadingComments] = useState(false);
   const [commentCount, setCommentCount] = useState(commentsCount);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const maskedAvatarPath = "/masked-avatar.jpg";
   const canDelete = Boolean(user?.id && authorUserId === user.id);
 
@@ -199,11 +200,22 @@ function PostCard({
     }
 
     setDeleting(true);
-    const success = await onDeletePost(id, imageUrl);
-    setDeleting(false);
+    setDeleteError("");
 
-    if (success === false) {
-      console.error("Post delete failed.");
+    try {
+      const result = await onDeletePost(id, imageUrl);
+
+      if (result?.success === false || result === false) {
+        const errorMessage = result?.error || "Unable to delete post.";
+        setDeleteError(errorMessage);
+        console.error("Post delete failed:", errorMessage);
+      }
+    } catch (error) {
+      const errorMessage = error?.message || "Unable to delete post.";
+      setDeleteError(errorMessage);
+      console.error("Post delete failed:", error);
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -341,6 +353,12 @@ function PostCard({
           </button>
         ) : null}
       </div>
+
+      {deleteError ? (
+        <p className={`mt-3 text-sm ${isDark ? "text-rose-300" : "text-rose-700"}`}>
+          {deleteError}
+        </p>
+      ) : null}
 
       {commentOpen && (
         <div

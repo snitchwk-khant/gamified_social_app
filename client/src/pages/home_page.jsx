@@ -362,11 +362,11 @@ function HomePage() {
 
       if (error) {
         console.error("Delete Post Error:", error);
-        return false;
+        return { success: false, error: error?.message || "Unable to delete post." };
       }
 
       setPosts((prevPosts) => prevPosts.filter((post) => post.id !== postId));
-      return true;
+      return { success: true };
     },
     []
   );

@@ -1,6 +1,6 @@
 import { useTheme } from "../../context/theme_context";
 
-function FeedHeader({ title, subtitle }) {
+function FeedHeader({ subtitle }) {
   const { isDark } = useTheme();
 
   return (
@@ -14,9 +14,6 @@ function FeedHeader({ title, subtitle }) {
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-[0.32em] text-slate-500">{subtitle}</p>
-          <h1 className={`text-2xl font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
-            {title}
-          </h1>
         </div>
         <div
           className={`rounded-full px-4 py-2 text-sm font-medium ${

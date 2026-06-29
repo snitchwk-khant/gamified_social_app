@@ -183,7 +183,7 @@ export async function uploadPostImage(userId, file) {
 
 export async function deletePost(postId, imageUrl = "") {
   if (!postId) {
-    return { error: new Error("Missing post ID.") };
+    return { data: null, error: new Error("Missing post ID.") };
   }
 
   const {
@@ -194,27 +194,35 @@ export async function deletePost(postId, imageUrl = "") {
   if (authError || !user?.id) {
     const error = authError || new Error("No authenticated user found.");
     console.error("deletePost Auth Error:", error);
-    return { error };
-  }
-
-  const { error } = await supabase
-    .from("posts")
-    .delete()
-    .eq("id", postId)
-    .eq("user_id", user.id);
-
-  if (error) {
-    console.error("deletePost Error:", error);
-    return { error };
+    return { data: null, error };
   }
 
   const imageDeleteError = await deletePostImage(imageUrl, user.id);
 
   if (imageDeleteError) {
-    return { error: imageDeleteError };
+    return { data: null, error: imageDeleteError };
   }
 
-  return { error: null };
+  const { data, error } = await supabase
+    .from("posts")
+    .delete()
+    .eq("id", postId)
+    .eq("user_id", user.id)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    console.error("deletePost Error:", error);
+    return { data: null, error };
+  }
+
+  if (!data?.id) {
+    const deleteError = new Error("Post delete failed: no database row was deleted.");
+    console.error("deletePost Error:", deleteError);
+    return { data: null, error: deleteError };
+  }
+
+  return { data, error: null };
 }
 
 async function deletePostImage(imageUrl, userId) {
