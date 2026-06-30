@@ -71,7 +71,9 @@ function MessageBubble({ author, avatar, profilePath, department, content, time,
           }`}
         >
           <div className="min-w-0">
-            <p className="truncate font-semibold">{author}</p>
+            <Link to={profilePath || "/profile"} className="block cursor-pointer truncate font-semibold transition hover:text-[#c446ff]">
+              {author}
+            </Link>
             {hasDepartment ? <p className="truncate">{department}</p> : null}
           </div>
           <span className="shrink-0">{time}</span>

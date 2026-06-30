@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useAuth } from "../../context/auth_context";
 import { useTheme } from "../../context/theme_context";
 
@@ -23,7 +24,8 @@ function Topbar() {
       </div>
 
       <div className="flex items-center gap-3">
-        <div
+        <Link
+          to="/profile"
           className={`flex items-center gap-2 rounded-full border px-3 py-2 text-sm ${
             isDark
               ? "border-slate-700 bg-slate-900 text-slate-100"
@@ -42,7 +44,7 @@ function Topbar() {
             )}
           </div>
           <span className="hidden sm:inline">{displayName}</span>
-        </div>
+        </Link>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/auth_context";
 import { useTheme } from "../../context/theme_context";
 import { searchProfiles } from "../../services/profile_service";
+import { getProfilePath } from "../../utils/profile_path";
 
 function UserSearch({ inputId = "user-search" }) {
   const navigate = useNavigate();
@@ -81,7 +82,7 @@ function UserSearch({ inputId = "user-search" }) {
     setQuery("");
     setResults([]);
     setIsOpen(false);
-    navigate(`/profile/${profileId}`);
+    navigate(getProfilePath(profileId, user?.id));
   }
 
   function handleBlur() {

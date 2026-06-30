@@ -4,6 +4,8 @@ function AdminHeader({ onMenuClick }) {
   const { user } = useAuth();
   const displayName = user?.full_name || user?.name || user?.email?.split("@")[0] || "Admin";
   const initials = user?.initials || displayName.charAt(0).toUpperCase();
+  const role = user?.role?.toString().trim().toLowerCase();
+  const roleLabel = role === "accountant" ? "Accountant" : "Admin";
 
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-[#f8fafc]/90 px-4 py-4 backdrop-blur md:px-6">
@@ -21,7 +23,7 @@ function AdminHeader({ onMenuClick }) {
           </button>
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#c446ff]">Workspace</p>
-            <h1 className="text-xl font-bold text-slate-950 sm:text-2xl">Admin Dashboard</h1>
+            <h1 className="text-xl font-bold text-slate-950 sm:text-2xl">{roleLabel} Dashboard</h1>
           </div>
         </div>
 
@@ -46,7 +48,7 @@ function AdminHeader({ onMenuClick }) {
             </div>
             <div className="hidden min-w-0 sm:block">
               <p className="max-w-[150px] truncate text-sm font-semibold text-slate-950">{displayName}</p>
-              <p className="text-xs text-slate-500">Admin</p>
+              <p className="text-xs text-slate-500">{roleLabel}</p>
             </div>
           </div>
         </div>

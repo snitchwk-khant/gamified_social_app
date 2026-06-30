@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
+import { useAuth } from "../../context/auth_context";
 import { useTheme } from "../../context/theme_context";
+import { getProfilePath } from "../../utils/profile_path";
 
 function formatRelativeTime(dateString) {
   const diffMs = Date.now() - new Date(dateString).getTime();
@@ -27,6 +29,7 @@ function formatRelativeTime(dateString) {
 }
 
 function CommentList({ comments, loading }) {
+  const { user } = useAuth();
   const { isDark } = useTheme();
 
   if (loading) {
@@ -51,7 +54,7 @@ function CommentList({ comments, loading }) {
           ? "/masked-avatar.jpg"
           : profile?.avatar_url ?? comment.author_avatar ?? null;
         const initials = (fullName.charAt(0) || "").toUpperCase();
-        const profilePath = !isAnonymousComment && comment.user_id ? `/profile/${comment.user_id}` : null;
+        const profilePath = !isAnonymousComment && comment.user_id ? getProfilePath(comment.user_id, user?.id) : null;
 
         return (
           <div
@@ -65,7 +68,7 @@ function CommentList({ comments, loading }) {
             <div className="flex items-start gap-3">
               {avatarSrc ? (
                 profilePath ? (
-                  <Link to={profilePath} aria-label={`Open ${fullName || "user"} profile`} className="shrink-0">
+                  <Link to={profilePath} aria-label={`Open ${fullName || "user"} profile`} className="shrink-0 cursor-pointer">
                     <img
                       src={avatarSrc}
                       alt={fullName}
@@ -83,7 +86,7 @@ function CommentList({ comments, loading }) {
                 <Link
                   to={profilePath}
                   aria-label={`Open ${fullName || "user"} profile`}
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
+                  className={`flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full text-sm font-semibold ${
                     isDark ? "bg-slate-700 text-white" : "bg-slate-200 text-slate-700"
                   }`}
                 >
@@ -104,7 +107,7 @@ function CommentList({ comments, loading }) {
                   {profilePath ? (
                     <Link
                       to={profilePath}
-                      className={`font-medium transition ${isDark ? "text-slate-300 hover:text-sky-300" : "text-slate-800 hover:text-[#c446ff]"}`}
+                      className={`cursor-pointer font-medium transition ${isDark ? "text-slate-300 hover:text-sky-300" : "text-slate-800 hover:text-[#c446ff]"}`}
                     >
                       {fullName}
                     </Link>

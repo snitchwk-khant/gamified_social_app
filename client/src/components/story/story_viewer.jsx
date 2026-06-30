@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { getStoryViewCount, recordStoryView } from "../../services/stories_service";
+import { getProfilePath } from "../../utils/profile_path";
 
 const AUTO_ADVANCE_MS = 5000;
 const STORY_BACKGROUND_CLASSES = {
@@ -221,7 +222,7 @@ function StoryViewer({ isOpen, stories = [], initialIndex = 0, initialStoryId = 
   const profile = activeStory?.profile || null;
   const displayName = profile?.full_name || activeStory?.author_name || "";
   const avatarUrl = profile?.avatar_url ?? activeStory?.author_avatar ?? null;
-  const profilePath = activeStory?.user_id ? `/profile/${activeStory.user_id}` : null;
+  const profilePath = activeStory?.user_id ? getProfilePath(activeStory.user_id, currentUserId) : null;
   const isStoryOwner = Boolean(currentUserId && activeStory?.user_id === currentUserId);
   const isTextStory = activeStory?.story_type === "text";
   const isVideoStory = activeStory?.media_type === "video";
@@ -371,7 +372,7 @@ function StoryViewer({ isOpen, stories = [], initialIndex = 0, initialStoryId = 
         <div className="mt-3 flex items-center justify-between gap-2 text-white sm:gap-3">
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             {profilePath ? (
-              <Link to={profilePath} aria-label={`Open ${displayName || "user"} profile`} className="shrink-0">
+              <Link to={profilePath} aria-label={`Open ${displayName || "user"} profile`} className="shrink-0 cursor-pointer">
                 {avatarUrl ? (
                   <img
                     src={avatarUrl}
@@ -398,7 +399,7 @@ function StoryViewer({ isOpen, stories = [], initialIndex = 0, initialStoryId = 
 
             <div className="min-w-0">
               {profilePath ? (
-                <Link to={profilePath} className="block max-w-[9rem] truncate text-xs font-semibold transition hover:text-white/80 sm:max-w-none sm:text-sm">
+                <Link to={profilePath} className="block max-w-[9rem] cursor-pointer truncate text-xs font-semibold transition hover:text-white/80 sm:max-w-none sm:text-sm">
                   {displayName}
                 </Link>
               ) : (

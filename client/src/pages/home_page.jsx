@@ -3,12 +3,13 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../context/auth_context";
 import * as postService from "../services/post_service";
 import * as storiesService from "../services/stories_service";
-import { getPinnedActiveAnnouncementsResult } from "../services/announcements_service";
-import { getFeatureFlags } from "../services/admin_configs_service";
+import { getActiveAnnouncements } from "../services/announcement_service";
+import MonthlyChampionCard from "../components/champions/monthly_champion_card";
 import FeedWidget from "../components/center_feed/feed_widget";
 import StoryViewer from "../components/story/story_viewer";
 import { useTheme } from "../context/theme_context";
 import { supabase } from "../lib/supabase";
+import { getProfilePath } from "../utils/profile_path";
 
 const STORY_CARD_STEP_PX = 250;
 const STORY_TEXT_MAX_LENGTH = 300;
@@ -116,7 +117,6 @@ function HomePage() {
   const [announcements, setAnnouncements] = useState([]);
   const [announcementsLoading, setAnnouncementsLoading] = useState(false);
   const [announcementsError, setAnnouncementsError] = useState("");
-  const [announcementsEnabled, setAnnouncementsEnabled] = useState(true);
   const [, setStoriesLoading] = useState(false);
   const [storiesError, setStoriesError] = useState("");
   const [storyUploading, setStoryUploading] = useState(false);
@@ -157,22 +157,6 @@ function HomePage() {
     }
   }, []);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    getFeatureFlags().then((flags) => {
-      if (!isMounted) {
-        return;
-      }
-
-      setAnnouncementsEnabled(flags.announcements_enabled !== false);
-    });
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
   const loadPosts = useCallback(async () => {
     try {
       const formatted = await postService.getPosts();
@@ -183,29 +167,20 @@ function HomePage() {
   }, []);
 
   const loadAnnouncements = useCallback(async () => {
-    if (!announcementsEnabled) {
-      setAnnouncements([]);
-      setAnnouncementsError("");
-      setAnnouncementsLoading(false);
-      return;
-    }
-
     setAnnouncementsLoading(true);
     setAnnouncementsError("");
 
-    const role = user?.role?.toString().trim().toLowerCase() || null;
-    const { data, error } = await getPinnedActiveAnnouncementsResult({ role });
-
-    if (error) {
+    try {
+      const rows = await getActiveAnnouncements();
+      setAnnouncements(rows);
+    } catch (err) {
+      console.error("Load Announcements Error:", err);
       setAnnouncements([]);
       setAnnouncementsError("Unable to load announcements.");
+    } finally {
       setAnnouncementsLoading(false);
-      return;
     }
-
-    setAnnouncements(data || []);
-    setAnnouncementsLoading(false);
-  }, [announcementsEnabled, user?.role]);
+  }, []);
 
   useEffect(() => {
     if (!user?.id) {
@@ -626,7 +601,7 @@ function HomePage() {
                     .join("")
                 : "";
 
-              const profilePath = story.user_id ? `/profile/${story.user_id}` : null;
+              const profilePath = story.user_id ? getProfilePath(story.user_id, user?.id) : null;
               const isStoryOwner = Boolean(user?.id && story.user_id === user.id);
 
               return (
@@ -636,7 +611,7 @@ function HomePage() {
                 >
                   <div className="flex items-center gap-3.5">
                     {profilePath ? (
-                      <Link to={profilePath} aria-label={`Open ${fullName || "user"} profile`} className="shrink-0">
+                      <Link to={profilePath} aria-label={`Open ${fullName || "user"} profile`} className="shrink-0 cursor-pointer">
                         {avatarUrl ? (
                           <img
                             src={avatarUrl}
@@ -669,7 +644,7 @@ function HomePage() {
                       {profilePath ? (
                         <Link
                           to={profilePath}
-                          className="block truncate text-sm font-bold text-slate-900 transition hover:text-slate-700"
+                          className="block cursor-pointer truncate text-sm font-bold text-slate-900 transition hover:text-slate-700"
                         >
                           {fullName}
                         </Link>
@@ -891,15 +866,17 @@ function HomePage() {
         />
       </section>
 
+      <MonthlyChampionCard />
+
       <FeedWidget
         posts={posts}
         draft={draft}
         onDraftChange={setDraft}
         onPublish={handlePublish}
         onCommentCreated={handlePostCommentCreated}
-        announcements={announcementsEnabled ? announcements : []}
-        announcementsLoading={announcementsEnabled ? announcementsLoading : false}
-        announcementsError={announcementsEnabled ? announcementsError : ""}
+        announcements={announcements}
+        announcementsLoading={announcementsLoading}
+        announcementsError={announcementsError}
         onRetryAnnouncements={loadAnnouncements}
         onDeletePost={handleDeletePost}
       />

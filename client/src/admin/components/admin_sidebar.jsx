@@ -10,6 +10,10 @@ const iconPaths = {
     "M5 4h14a2 2 0 0 1 2 2v13.2a.8.8 0 0 1-1.28.64L16 17H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm2 4v2h10V8H7Zm0 4v2h7v-2H7Z",
   stories:
     "M12 2 3 6v6c0 5.25 3.84 8.74 9 10 5.16-1.26 9-4.75 9-10V6l-9-4Zm0 4.1 5 2.22V12c0 3.28-1.9 5.56-5 6.65-3.1-1.09-5-3.37-5-6.65V8.32l5-2.22Z",
+  sales:
+    "M4 5h16v14H4V5Zm2 2v10h12V7H6Zm2 2h3v2H8V9Zm0 4h8v2H8v-2Zm5-4h3v2h-3V9Z",
+  announcements:
+    "M4 10v4h3l5 4V6l-5 4H4Zm10-3.2v10.4c2.33-.82 4-3.04 4-5.2s-1.67-4.38-4-5.2ZM20 12c0 3.31-2.03 6.15-4.91 7.34l-.78-1.84A6 6 0 0 0 18 12a6 6 0 0 0-3.69-5.5l.78-1.84A8 8 0 0 1 20 12Z",
   reports:
     "M5 3h10l4 4v14H5V3Zm9 1.5V8h3.5L14 4.5ZM8 12v2h8v-2H8Zm0 4v2h8v-2H8Zm0-8v2h4V8H8Z",
   settings:
@@ -25,8 +29,11 @@ function AdminIcon({ name }) {
 }
 
 function AdminSidebar({ isOpen, onClose }) {
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
   const location = useLocation();
+  const role = user?.role?.toString().trim().toLowerCase() || "employee";
+  const roleLabel = role === "accountant" ? "Accountant" : "Admin";
+  const visibleRoutes = adminRoutes.filter((item) => item.allowedRoles.includes(role));
 
   const navLinkClass = (isActive) =>
     `flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
@@ -50,7 +57,7 @@ function AdminSidebar({ isOpen, onClose }) {
       >
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#c446ff]">Admin</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#c446ff]">{roleLabel}</p>
             <h1 className="mt-1 text-xl font-bold text-slate-950">Gemify</h1>
           </div>
           <button
@@ -66,7 +73,7 @@ function AdminSidebar({ isOpen, onClose }) {
         </div>
 
         <nav className="mt-8 space-y-2">
-          {adminRoutes.map((item) => {
+          {visibleRoutes.map((item) => {
             const itemPath = `/admin/${item.path}`;
             const isActive =
               location.pathname === itemPath || (item.path === "dashboard" && location.pathname === "/admin");

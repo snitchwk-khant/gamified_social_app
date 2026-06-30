@@ -15,24 +15,9 @@ function formatAnnouncementDate(value) {
   });
 }
 
-function parseMetadata(value) {
-  if (!value) {
-    return null;
-  }
-
-  if (typeof value === "object") {
-    return value;
-  }
-
-  if (typeof value === "string") {
-    try {
-      return JSON.parse(value);
-    } catch {
-      return null;
-    }
-  }
-
-  return null;
+function getCreatorName(announcement) {
+  const creator = announcement.creator;
+  return creator?.full_name || creator?.email || "Company";
 }
 
 function FeedWidget({
@@ -49,13 +34,10 @@ function FeedWidget({
 }) {
   const { isDark } = useTheme();
   const visibleAnnouncements = announcements.filter((item) => {
-    const meta = parseMetadata(item?.metadata);
-    const imageUrl =
-      item?.image_url || item?.image || item?.banner_url || meta?.image_url || meta?.image || null;
     const hasTitle = Boolean(item?.title?.toString().trim());
     const hasBody = Boolean(item?.body?.toString().trim());
 
-    return hasTitle || hasBody || Boolean(imageUrl);
+    return hasTitle || hasBody;
   });
 
   return (
@@ -88,29 +70,30 @@ function FeedWidget({
       {visibleAnnouncements.length > 0 ? (
         <div className="space-y-3">
           {visibleAnnouncements.map((item) => {
-            const meta = parseMetadata(item.metadata);
-            const priority = (item.priority || meta?.priority || "normal").toString().toUpperCase();
-            const imageUrl =
-              item.image_url || item.image || item.banner_url || meta?.image_url || meta?.image || null;
+            const creatorName = getCreatorName(item);
 
             return (
               <article
                 key={item.id}
-                className={`rounded-2xl border p-4 ${
+                className={`rounded-2xl border p-4 shadow-[0_12px_30px_rgba(196,70,255,0.08)] ${
                   isDark
-                    ? "border-slate-800 bg-slate-900 text-slate-100"
-                    : "border-slate-200 bg-white text-slate-900"
+                    ? "border-fuchsia-500/25 bg-slate-900 text-slate-100"
+                    : "border-fuchsia-100 bg-white text-slate-900"
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">HR announcement</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#c446ff]">
+                      📢 Announcement
+                    </p>
                     <h3 className={`mt-1 text-base font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
                       {item.title || "Announcement"}
                     </h3>
                   </div>
                   <div className="text-right">
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">{priority}</p>
+                    {item.is_pinned ? (
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#c446ff]">Pinned</p>
+                    ) : null}
                     <p className="mt-1 text-xs text-slate-500">{formatAnnouncementDate(item.created_at)}</p>
                   </div>
                 </div>
@@ -119,13 +102,9 @@ function FeedWidget({
                   {item.body || ""}
                 </p>
 
-                {imageUrl ? (
-                  <img
-                    src={imageUrl}
-                    alt={item.title || "Announcement image"}
-                    className="mt-3 max-h-64 w-full rounded-xl border border-slate-200 object-cover"
-                  />
-                ) : null}
+                <p className={`mt-3 text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                  Created by {creatorName}
+                </p>
               </article>
             );
           })}

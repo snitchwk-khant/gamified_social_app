@@ -1,1 +1,61 @@
 @import "tailwindcss";
+
+@keyframes leaderboard-flame-flicker {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.98) rotate(0deg);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.04) rotate(4deg);
+  }
+}
+
+@keyframes leaderboard-glow-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: translateX(-50%) scale(0.94);
+  }
+  50% {
+    opacity: 0.85;
+    transform: translateX(-50%) scale(1.08);
+  }
+}
+
+@keyframes leaderboard-crown-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes leaderboard-medal-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+.leaderboard-flame {
+  animation: leaderboard-flame-flicker 2.4s ease-in-out infinite;
+}
+
+.leaderboard-glow {
+  animation: leaderboard-glow-breathe 3.6s ease-in-out infinite;
+}
+
+.leaderboard-crown {
+  animation: leaderboard-crown-float 3s ease-in-out infinite;
+}
+
+.leaderboard-medal {
+  animation: leaderboard-medal-bounce 2.8s ease-in-out infinite;
+}

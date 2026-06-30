@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { GoDotFill } from "react-icons/go";
 import { useParams } from "react-router-dom";
 import { useAuth } from "../context/auth_context";
 import { useTheme } from "../context/theme_context";
@@ -8,10 +9,19 @@ import {
   getProfileAlbumImages,
   getProfileById,
   getProfileStats,
+  recordProfileView,
   saveProfile,
+  subscribeToProfileViews,
   updateProfileAvatar,
   uploadProfileAlbumImage,
 } from "../services/profile_service";
+import { formatChampionMonth, getMonthlyChampionHistory } from "../services/monthly_champion_service";
+import {
+  buildShopLeaderboard,
+  getEmployeeActiveShopAssignment,
+  getShopEmployees,
+  getShopSalesTargets,
+} from "../services/shop_service";
 
 const EMPTY_FORM = {
   full_name: "",
@@ -19,13 +29,16 @@ const EMPTY_FORM = {
   hobby: "",
   relationship_status: "",
   zodiac_sign: "",
+  personality: "",
   phone: "",
   telegram_username: "",
   birthday: "",
   favorite_music: "",
 };
+const EMPTY_STATS = { postsCount: 0, storiesCount: 0, profileViewsCount: 0 };
 
 const RELATIONSHIP_OPTIONS = ["Single", "Relationship", "Situationship"];
+const PERSONALITY_OPTIONS = ["Introvert", "Extrovert"];
 const ZODIAC_OPTIONS = [
   "Aries",
   "Taurus",
@@ -51,9 +64,11 @@ function ProfilePage() {
   const isOwnProfile = Boolean(user?.id && profileUserId === user.id);
 
   const [profile, setProfile] = useState(null);
-  const [stats, setStats] = useState({ postsCount: 0, storiesCount: 0 });
+  const [stats, setStats] = useState(EMPTY_STATS);
   const [form, setForm] = useState(EMPTY_FORM);
   const [albumImages, setAlbumImages] = useState([]);
+  const [championHistory, setChampionHistory] = useState([]);
+  const [shopPerformance, setShopPerformance] = useState(null);
   const [viewerIndex, setViewerIndex] = useState(null);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -79,6 +94,7 @@ function ProfilePage() {
         setError(null);
         setProfile(null);
         setAlbumImages([]);
+        setChampionHistory([]);
         return;
       }
 
@@ -88,10 +104,11 @@ function ProfilePage() {
       setEditing(false);
 
       try {
-        const [profileData, statsData, albumData] = await Promise.all([
+        const [profileData, statsData, albumData, championRows] = await Promise.all([
           isOwnProfile ? getProfile() : getProfileById(profileUserId),
           getProfileStats(profileUserId),
           getProfileAlbumImages(profileUserId),
+          getMonthlyChampionHistory({ userId: profileUserId }),
         ]);
 
         if (!isMounted) {
@@ -100,9 +117,10 @@ function ProfilePage() {
 
         if (!profileData) {
           setProfile(null);
-          setStats({ postsCount: 0, storiesCount: 0 });
+          setStats(EMPTY_STATS);
           setForm(EMPTY_FORM);
           setAlbumImages([]);
+          setChampionHistory([]);
           setError("Unable to find this profile.");
           return;
         }
@@ -115,12 +133,14 @@ function ProfilePage() {
           hobby: profileData.hobby || "",
           relationship_status: profileData.relationship_status || "",
           zodiac_sign: getProfileZodiacValue(profileData),
+          personality: profileData.personality || "",
           phone: profileData.phone || "",
           telegram_username: profileData.telegram_username || "",
           birthday: profileData.birthday || "",
           favorite_music: getProfileMusicValue(profileData),
         });
         setAlbumImages(albumData);
+        setChampionHistory(championRows);
       } catch (err) {
         if (!isMounted) {
           return;
@@ -128,6 +148,7 @@ function ProfilePage() {
 
         console.error("Profile Load Error:", err);
         setProfile(null);
+        setChampionHistory([]);
         setError("Unable to load profile. Please try again.");
       } finally {
         if (isMounted) {
@@ -143,6 +164,106 @@ function ProfilePage() {
     };
   }, [isOwnProfile, profileUserId, user?.name]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadShopPerformance() {
+      if (!profile?.id) {
+        setShopPerformance(null);
+        return;
+      }
+
+      const now = new Date();
+
+      try {
+        const assignment = await getEmployeeActiveShopAssignment(profile.id);
+
+        if (!assignment?.shop_id) {
+          if (isMounted) {
+            setShopPerformance(null);
+          }
+          return;
+        }
+
+        const [employeeRows, targetRows] = await Promise.all([
+          getShopEmployees(assignment.shop_id),
+          getShopSalesTargets({ month: now.getMonth() + 1, year: now.getFullYear() }),
+        ]);
+        const rankedShop = buildShopLeaderboard(targetRows).find((item) => item.shop_id === assignment.shop_id) || null;
+
+        if (isMounted) {
+          setShopPerformance({
+            shop: assignment.shop,
+            employeeCount: employeeRows.length,
+            target: rankedShop,
+          });
+        }
+      } catch (shopError) {
+        console.error("Profile shop performance load error:", shopError);
+
+        if (isMounted) {
+          setShopPerformance(null);
+        }
+      }
+    }
+
+    loadShopPerformance();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [profile?.id]);
+
+  useEffect(() => {
+    if (!profile?.id || !user?.id || isOwnProfile) {
+      return undefined;
+    }
+
+    let isActive = true;
+
+    async function trackProfileView() {
+      try {
+        const createdView = await recordProfileView(profile.id);
+
+        if (isActive && createdView) {
+          setStats((current) => ({
+            ...current,
+            profileViewsCount: current.profileViewsCount + 1,
+          }));
+        }
+      } catch (err) {
+        console.error("Profile View Record Error:", err);
+      }
+    }
+
+    trackProfileView();
+
+    return () => {
+      isActive = false;
+    };
+  }, [isOwnProfile, profile?.id, user?.id]);
+
+  useEffect(() => {
+    if (!profileUserId) {
+      return undefined;
+    }
+
+    const channel = subscribeToProfileViews(profileUserId, (profileView) => {
+      if (profileView?.viewer_id === user?.id) {
+        return;
+      }
+
+      setStats((current) => ({
+        ...current,
+        profileViewsCount: current.profileViewsCount + 1,
+      }));
+    });
+
+    return () => {
+      channel?.unsubscribe();
+    };
+  }, [profileUserId, user?.id]);
+
   const handleChange = (field) => (event) => {
     setForm((current) => ({
       ...current,
@@ -157,8 +278,9 @@ function ProfilePage() {
     hobby: form.hobby.trim(),
     relationship_status: form.relationship_status || null,
     zodiac_sign: form.zodiac_sign || null,
+    personality: form.personality || null,
     phone: form.phone.trim(),
-    telegram_username: normalizeTelegramUsername(form.telegram_username),
+    telegram_username: normalizeTelegramUsername(form.telegram_username) || null,
     birthday: form.birthday ? form.birthday : null,
     favorite_music: form.favorite_music.trim(),
     location: profile?.location || "",
@@ -446,12 +568,22 @@ function ProfilePage() {
                       {profile.relationship_status}
                     </span>
                   ) : null}
+                  {championHistory.length ? (
+                    <span
+                      className={`mt-3 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                        isDark ? "bg-amber-950 text-amber-200" : "bg-amber-50 text-amber-700"
+                      }`}
+                    >
+                      🏆 Monthly Champion
+                    </span>
+                  ) : null}
                 </div>
               </div>
 
-              <div className="grid w-full grid-cols-2 gap-3 sm:min-w-[240px] lg:w-auto">
+              <div className="grid w-full grid-cols-3 gap-3 lg:min-w-[360px] lg:w-auto">
                 <StatCard label="Posts" value={stats.postsCount} />
                 <StatCard label="Stories" value={stats.storiesCount} />
+                <StatCard label="Profile Views" value={stats.profileViewsCount} />
               </div>
             </div>
 
@@ -511,13 +643,58 @@ function ProfilePage() {
             }`}
           >
             <div className="space-y-4">
-              <InfoLine icon={getZodiacIcon(zodiacSign)} text={zodiacSign || "N/A"} />
-              <InfoLine icon="📱" text={profile.phone || "N/A"} />
-              <InfoLine icon="🎂" text={formatBirthday(profile.birthday)} />
-              <InfoLine icon="✈" text={profile.telegram_username || "N/A"} href={telegramUrl} />
-              <InfoLine icon="🎯" text={profile.hobby || "N/A"} />
+              <InfoLine icon={<GoDotFill />} text={zodiacSign || "N/A"} />
+              {profile.personality ? <InfoLine icon={<GoDotFill />} text={profile.personality} /> : null}
+              <InfoLine icon={<GoDotFill />} text={profile.phone || "N/A"} />
+              <InfoLine icon={<GoDotFill />} text={formatBirthday(profile.birthday)} />
+              <InfoLine icon={<GoDotFill />} text={profile.hobby || "N/A"} />
+              {telegramUrl ? <TelegramLink href={telegramUrl} /> : null}
             </div>
           </section>
+
+          {shopPerformance?.shop ? (
+            <section
+              className={`rounded-2xl border p-4 sm:p-6 ${
+                isDark ? "border-slate-800 bg-slate-900 shadow-xl" : "border-slate-200 bg-white shadow-sm"
+              }`}
+            >
+              <h3 className={`text-lg font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>Current Shop</h3>
+              <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                <ShopMetric label="Shop" value={shopPerformance.shop.name} />
+                <ShopMetric label="Employee Count" value={new Intl.NumberFormat().format(shopPerformance.employeeCount)} />
+                <ShopMetric
+                  label="Achievement"
+                  value={shopPerformance.target ? `${new Intl.NumberFormat().format(shopPerformance.target.achievement)}%` : "N/A"}
+                />
+                <ShopMetric
+                  label="Shop Rank"
+                  value={shopPerformance.target?.rank ? `#${shopPerformance.target.rank}` : "N/A"}
+                />
+              </div>
+            </section>
+          ) : null}
+
+          {championHistory.length ? (
+            <section
+              className={`rounded-2xl border p-4 sm:p-6 ${
+                isDark ? "border-amber-400/25 bg-slate-900 shadow-xl" : "border-amber-100 bg-white shadow-sm"
+              }`}
+            >
+              <h3 className={`text-lg font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>Champion History</h3>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {championHistory.map((champion) => (
+                  <span
+                    key={champion.id}
+                    className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                      isDark ? "bg-amber-950 text-amber-200" : "bg-amber-50 text-amber-700"
+                    }`}
+                  >
+                    {formatChampionMonth(champion.month)}
+                  </span>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           <section
             className={`rounded-2xl border p-4 text-center sm:p-6 ${
@@ -640,15 +817,26 @@ function ProfilePage() {
                   onChange={handleChange("relationship_status")}
                   options={RELATIONSHIP_OPTIONS}
                 />
+                <Field label="Birthday" type="date" value={form.birthday} onChange={handleChange("birthday")} />
                 <SelectField
                   label="Zodiac Sign"
                   value={form.zodiac_sign}
                   onChange={handleChange("zodiac_sign")}
                   options={ZODIAC_OPTIONS}
                 />
+                <SelectField
+                  label="Personality"
+                  value={form.personality}
+                  onChange={handleChange("personality")}
+                  options={PERSONALITY_OPTIONS}
+                />
                 <Field label="Phone" value={form.phone} onChange={handleChange("phone")} />
-                <Field label="Birthday" type="date" value={form.birthday} onChange={handleChange("birthday")} />
-                <Field label="Telegram Username" value={form.telegram_username} onChange={handleChange("telegram_username")} />
+                <Field
+                  label="Telegram"
+                  value={form.telegram_username}
+                  onChange={handleChange("telegram_username")}
+                  placeholder="Telegram username"
+                />
                 <Field label="Hobby" value={form.hobby} onChange={handleChange("hobby")} maxLength={100} />
                 <Field label="Now Listening (YouTube Link)" value={form.favorite_music} onChange={handleChange("favorite_music")} />
               </div>
@@ -771,7 +959,7 @@ function normalizeTelegramUsername(value) {
 
 function getTelegramUrl(value) {
   const username = normalizeTelegramUsername(value || "");
-  return username ? `https://t.me/${username}` : "";
+  return /^[A-Za-z0-9_]+$/.test(username) ? `https://t.me/${username}` : "";
 }
 
 function getProfileMusicValue(profile) {
@@ -833,25 +1021,6 @@ function getYouTubeUrlCandidates(value) {
   return [...new Set(candidates)];
 }
 
-function getZodiacIcon(value) {
-  const zodiacIcons = {
-    Aries: "♈",
-    Taurus: "♉",
-    Gemini: "♊",
-    Cancer: "♋",
-    Leo: "♌",
-    Virgo: "♍",
-    Libra: "♎",
-    Scorpio: "♏",
-    Sagittarius: "♐",
-    Capricorn: "♑",
-    Aquarius: "♒",
-    Pisces: "♓",
-  };
-
-  return zodiacIcons[value] || "☆";
-}
-
 function validateProfileForm(form) {
   if (!form.full_name.trim()) {
     return "Full Name is required.";
@@ -869,6 +1038,16 @@ function validateProfileForm(form) {
     return "Choose a valid relationship status.";
   }
 
+  if (form.personality && !PERSONALITY_OPTIONS.includes(form.personality)) {
+    return "Choose a valid personality type.";
+  }
+
+  const telegramUsername = normalizeTelegramUsername(form.telegram_username);
+
+  if (telegramUsername && !/^[A-Za-z0-9_]+$/.test(telegramUsername)) {
+    return "Telegram username can only use letters, numbers, and underscores.";
+  }
+
   if (form.favorite_music.trim() && !getYouTubeUrl(form.favorite_music)) {
     return "Now Listening must be a valid YouTube URL.";
   }
@@ -878,16 +1057,68 @@ function validateProfileForm(form) {
 
 function StatCard({ label, value }) {
   const { isDark } = useTheme();
+  const formattedValue = new Intl.NumberFormat().format(value || 0);
 
   return (
     <div
-      className={`rounded-2xl border p-4 text-center ${
+      className={`rounded-2xl border p-3 text-center sm:p-4 ${
         isDark ? "border-slate-800 bg-slate-950 text-slate-100" : "border-slate-200 bg-slate-50 text-slate-900"
       }`}
     >
-      <p className="text-3xl font-semibold">{value}</p>
-      <p className="mt-2 text-sm text-slate-500">{label}</p>
+      <p className="break-words text-2xl font-semibold leading-tight sm:text-3xl">{formattedValue}</p>
+      <p className="mt-2 text-xs font-medium text-slate-500 sm:text-sm">{label}</p>
     </div>
+  );
+}
+
+function ShopMetric({ label, value }) {
+  const { isDark } = useTheme();
+
+  return (
+    <div className={`rounded-2xl border p-3 ${isDark ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-slate-50"}`}>
+      <p className={isDark ? "text-xs font-semibold uppercase tracking-[0.18em] text-slate-400" : "text-xs font-semibold uppercase tracking-[0.18em] text-slate-500"}>
+        {label}
+      </p>
+      <p className={isDark ? "mt-2 break-words text-sm font-semibold text-slate-100" : "mt-2 break-words text-sm font-semibold text-slate-900"}>
+        {value || "N/A"}
+      </p>
+    </div>
+  );
+}
+
+function TelegramLink({ href }) {
+  const { isDark } = useTheme();
+
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      aria-label="Open Telegram profile"
+      className={`flex items-center gap-2 rounded-2xl px-1 py-2 transition ${
+        isDark
+          ? "text-sky-200 hover:bg-slate-800/70"
+          : "text-[#229ed9] hover:bg-slate-100"
+      }`}
+    >
+      <span className="w-6 shrink-0 text-center text-base">
+        <GoDotFill />
+      </span>
+      <TelegramIcon />
+    </a>
+  );
+}
+
+function TelegramIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-6 w-6"
+      fill="currentColor"
+    >
+      <path d="M21.94 4.12a1.48 1.48 0 0 0-1.54-.23L3.04 10.58c-1.13.44-1.12 2.05.02 2.46l4.41 1.57 1.69 5.35c.32 1.02 1.64 1.28 2.32.46l2.43-2.91 4.52 3.35c.84.62 2.03.16 2.24-.86l2.3-14.42a1.48 1.48 0 0 0-1.03-1.46Zm-3.1 3.45-8.49 7.7-.33 2.91-1.05-3.33 9.87-7.28Z" />
+    </svg>
   );
 }
 
@@ -956,7 +1187,7 @@ function SelectField({ label, value, onChange, options }) {
   );
 }
 
-function Field({ label, value, onChange, type = "text", required = false, maxLength }) {
+function Field({ label, value, onChange, type = "text", required = false, maxLength, placeholder = "" }) {
   const { isDark } = useTheme();
 
   return (
@@ -968,6 +1199,7 @@ function Field({ label, value, onChange, type = "text", required = false, maxLen
         onChange={onChange}
         required={required}
         maxLength={maxLength}
+        placeholder={placeholder}
         className={`mt-2 w-full rounded-2xl border px-4 py-3 text-sm outline-none transition ${
           isDark
             ? "border-slate-700 bg-slate-950 text-slate-200 focus:border-sky-500"

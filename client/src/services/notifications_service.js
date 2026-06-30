@@ -1,6 +1,7 @@
 import { supabase } from "../lib/supabase";
 
 const NOTIFICATION_FIELDS = "*";
+const NOTIFICATION_WITH_ACTOR_FIELDS = "*,actor:profiles!notifications_actor_id_fkey(id,full_name,email,avatar_url)";
 
 function logSupabaseError(label, error) {
   console.error(`${label}:`, {
@@ -26,6 +27,7 @@ function normalizeNotification(row) {
     id: row?.id,
     user_id: row?.user_id || row?.recipient_id || null,
     actor_id: row?.actor_id || null,
+    actor: row?.actor || null,
     type: row?.type || row?.notification_type || "general",
     title: row?.title || row?.subject || "Notification",
     body: row?.body || row?.message || row?.content || "",
@@ -36,10 +38,10 @@ function normalizeNotification(row) {
   };
 }
 
-async function fetchByRecipientColumn(columnName, userId) {
+async function fetchByRecipientColumn(columnName, userId, fields = NOTIFICATION_FIELDS) {
   return supabase
     .from("notifications")
-    .select(NOTIFICATION_FIELDS)
+    .select(fields)
     .eq(columnName, userId)
     .order("created_at", { ascending: false });
 }
@@ -65,7 +67,11 @@ export async function getMyNotificationsResult() {
     return { data: [], error };
   }
 
-  const primary = await fetchByRecipientColumn("user_id", user.id);
+  let primary = await fetchByRecipientColumn("user_id", user.id, NOTIFICATION_WITH_ACTOR_FIELDS);
+
+  if (primary.error) {
+    primary = await fetchByRecipientColumn("user_id", user.id);
+  }
 
   if (!primary.error) {
     return {
@@ -75,7 +81,11 @@ export async function getMyNotificationsResult() {
   }
 
   if (isMissingColumnError(primary.error)) {
-    const fallback = await fetchByRecipientColumn("recipient_id", user.id);
+    let fallback = await fetchByRecipientColumn("recipient_id", user.id, NOTIFICATION_WITH_ACTOR_FIELDS);
+
+    if (fallback.error) {
+      fallback = await fetchByRecipientColumn("recipient_id", user.id);
+    }
 
     if (!fallback.error) {
       return {

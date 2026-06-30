@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { useAuth } from "../../context/auth_context";
 import { createAdminUser, getAdminUsers } from "../services/admin_users_service";
+import { getProfilePath } from "../../utils/profile_path";
 
 const DEFAULT_FORM = {
   fullName: "",
@@ -9,7 +12,15 @@ const DEFAULT_FORM = {
 };
 
 function formatRole(role) {
-  return role === "admin" ? "Admin" : "User";
+  if (role === "admin") {
+    return "Admin";
+  }
+
+  if (role === "accountant") {
+    return "Accountant";
+  }
+
+  return "Employee";
 }
 
 function formatDate(value) {
@@ -56,7 +67,7 @@ function validateForm(form) {
     errors.password = "Password must be at least 8 characters.";
   }
 
-  if (!["employee", "admin"].includes(form.role)) {
+  if (!["employee", "admin", "accountant"].includes(form.role)) {
     errors.role = "Select a valid role.";
   }
 
@@ -64,6 +75,7 @@ function validateForm(form) {
 }
 
 function AdminUsersPage() {
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
@@ -243,15 +255,23 @@ function AdminUsersPage() {
                   return (
                     <tr key={user.id} className="text-slate-700">
                       <td className="px-5 py-4">
-                        <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-[#f6e8ff] text-sm font-bold text-[#c446ff]">
+                        <Link
+                          to={getProfilePath(user.id, currentUser?.id)}
+                          aria-label={`Open ${user.full_name || user.email || "user"} profile`}
+                          className="flex h-11 w-11 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-[#f6e8ff] text-sm font-bold text-[#c446ff]"
+                        >
                           {user.avatar_url ? (
                             <img src={user.avatar_url} alt={user.full_name || user.email} className="h-full w-full object-cover" />
                           ) : (
                             initials
                           )}
-                        </div>
+                        </Link>
                       </td>
-                      <td className="px-5 py-4 font-semibold text-slate-950">{user.full_name || "Unnamed user"}</td>
+                      <td className="px-5 py-4 font-semibold text-slate-950">
+                        <Link to={getProfilePath(user.id, currentUser?.id)} className="cursor-pointer transition hover:text-[#c446ff]">
+                          {user.full_name || "Unnamed user"}
+                        </Link>
+                      </td>
                       <td className="px-5 py-4">{user.email || "N/A"}</td>
                       <td className="px-5 py-4">
                         <span className="rounded-full bg-[#f6e8ff] px-3 py-1 text-xs font-semibold text-[#c446ff]">
@@ -342,7 +362,8 @@ function AdminUsersPage() {
                   onChange={(event) => updateForm("role", event.target.value)}
                   className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-[#c446ff] focus:bg-white"
                 >
-                  <option value="employee">User</option>
+                  <option value="employee">Employee</option>
+                  <option value="accountant">Accountant</option>
                   <option value="admin">Admin</option>
                 </select>
                 {formErrors.role ? <p className="mt-1 text-xs text-rose-600">{formErrors.role}</p> : null}

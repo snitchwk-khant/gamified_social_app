@@ -44,6 +44,7 @@ const PROFILE_FIELDS = "*";
 const PROFILE_ALBUM_FIELDS = "id,user_id,image_url,sort_order,created_at";
 const PROFILE_SEARCH_FIELDS = "id,avatar_url,full_name,employee_id,department,email";
 const PROFILE_ROLES = new Set(["admin", "hr", "accountant", "employee"]);
+const PROFILE_VIEW_SESSION_PREFIX = "gemify-profile-view";
 
 function normalizeRoleForProfile(value) {
   const role = value?.toString().trim().toLowerCase();
@@ -255,26 +256,150 @@ export async function getProfileStats(userId, stories = null) {
     return {
       postsCount: 0,
       storiesCount: 0,
+      profileViewsCount: 0,
     };
   }
 
-  const [{ count: postsCount, error: postsError }, storiesCount] = await Promise.all([
+  const [
+    { count: postsCount, error: postsError },
+    storiesCount,
+    { count: profileViewsCount, error: profileViewsError },
+  ] = await Promise.all([
     supabase
       .from("posts")
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
       .eq("is_anonymous", false),
     getActiveStoryCountByUserId(userId, stories),
+    getProfileViewsCountResult(userId),
   ]);
 
   if (postsError) {
     console.error("getProfileStats Posts Error:", postsError);
   }
 
+  if (profileViewsError) {
+    console.error("getProfileStats Profile Views Error:", profileViewsError);
+  }
+
   return {
     postsCount: postsError ? 0 : postsCount || 0,
     storiesCount,
+    profileViewsCount: profileViewsError ? 0 : profileViewsCount || 0,
   };
+}
+
+export async function recordProfileView(profileId) {
+  if (!profileId) {
+    return false;
+  }
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError) {
+    console.error("recordProfileView Auth Error:", authError);
+    throw authError;
+  }
+
+  if (!user?.id || user.id === profileId) {
+    return false;
+  }
+
+  const sessionKey = getProfileViewSessionKey(profileId, user.id);
+
+  if (hasSessionProfileView(sessionKey)) {
+    return false;
+  }
+
+  const viewedSince = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { count, error: recentViewError } = await supabase
+    .from("profile_views")
+    .select("id", { count: "exact", head: true })
+    .eq("profile_id", profileId)
+    .eq("viewer_id", user.id)
+    .gte("viewed_at", viewedSince);
+
+  if (recentViewError) {
+    console.error("recordProfileView Recent View Error:", recentViewError);
+    throw recentViewError;
+  }
+
+  if ((count || 0) > 0) {
+    setSessionProfileView(sessionKey);
+    return false;
+  }
+
+  const { data, error } = await supabase
+    .from("profile_views")
+    .insert({
+      profile_id: profileId,
+      viewer_id: user.id,
+    })
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    console.error("recordProfileView Insert Error:", error);
+    throw error;
+  }
+
+  setSessionProfileView(sessionKey);
+
+  return Boolean(data?.id);
+}
+
+export function subscribeToProfileViews(profileId, onProfileView) {
+  if (!profileId || typeof onProfileView !== "function") {
+    return null;
+  }
+
+  const channel = supabase
+    .channel(`profile-views:${profileId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "profile_views",
+        filter: `profile_id=eq.${profileId}`,
+      },
+      (payload) => {
+        onProfileView(payload.new);
+      },
+    )
+    .subscribe();
+
+  return channel;
+}
+
+function getProfileViewsCountResult(userId) {
+  return supabase
+    .from("profile_views")
+    .select("id", { count: "exact", head: true })
+    .eq("profile_id", userId);
+}
+
+function getProfileViewSessionKey(profileId, viewerId) {
+  return `${PROFILE_VIEW_SESSION_PREFIX}:${profileId}:${viewerId}`;
+}
+
+function hasSessionProfileView(sessionKey) {
+  try {
+    return window.sessionStorage.getItem(sessionKey) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function setSessionProfileView(sessionKey) {
+  try {
+    window.sessionStorage.setItem(sessionKey, "1");
+  } catch {
+    // Session storage can be unavailable in private or restricted browser modes.
+  }
 }
 
 export async function uploadAvatar(userId, file) {
@@ -575,6 +700,7 @@ export async function saveProfile(userId, profileData, avatarFile) {
     hobby: profileData.hobby,
     relationship_status: profileData.relationship_status,
     zodiac_sign: profileData.zodiac_sign,
+    personality: profileData.personality,
     phone: profileData.phone,
     telegram_username: profileData.telegram_username,
     birthday: profileData.birthday,
@@ -683,8 +809,10 @@ export default {
   getProfileAlbumImages,
   getProfileById,
   getProfileStats,
+  recordProfileView,
   saveProfile,
   searchProfiles,
+  subscribeToProfileViews,
   updateProfileAvatar,
   uploadAvatar,
   uploadProfileAlbumImage,

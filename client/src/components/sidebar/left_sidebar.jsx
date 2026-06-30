@@ -4,11 +4,13 @@ import UserCard from "./user_card";
 import UserSearch from "../user_search/user_search";
 import { useAuth } from "../../context/auth_context";
 import { useTheme } from "../../context/theme_context";
+import { GoCommentDiscussion } from "react-icons/go";
 
 function LeftSidebar() {
   const { user } = useAuth();
   const { isDark } = useTheme();
-  const isAdmin = user?.role?.toString().trim().toLowerCase() === "admin";
+  const role = user?.role?.toString().trim().toLowerCase();
+  const canViewAdminLinks = role === "admin" || role === "accountant";
 
   return (
     <div
@@ -26,11 +28,28 @@ function LeftSidebar() {
         <nav className="mt-4 space-y-3">
           <MenuItem to="/" icon="🏠" title="Home" />
           <MenuItem to="/notifications" icon="🔔" title="Notifications" />
+          <MenuItem to="/leaderboard" icon="🏆" title="Leaderboard" />
+          <MenuItem to="/monthly-champions" icon="👑" title="Champions" />
+          <MenuItem to="/individual-ranking" icon="👤" title="Individual Ranking" />
+          <MenuItem to="/shops" icon="🏪" title="Shops" />
+          <MenuItem to="/gemify-room" icon={<GoCommentDiscussion />} title="Gemify Room" />
           <MenuItem to="/profile" icon="👤" title="Profile" />
-          {isAdmin ? <MenuItem to="/admin" icon="🛡️" title="Admin" /> : null}
         </nav>
       </div>
-      <UserCard />
+      <div className="space-y-4">
+        {canViewAdminLinks ? (
+          <div>
+            <p className={`px-4 text-xs font-semibold uppercase tracking-[0.24em] ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+              Admin
+            </p>
+            <nav className="mt-3 space-y-3">
+              <MenuItem to="/admin/sales-targets" icon="📊" title="Sales Targets" />
+              <MenuItem to="/admin/announcements" icon="📢" title="Announcements" />
+            </nav>
+          </div>
+        ) : null}
+        <UserCard />
+      </div>
     </div>
   );
 }

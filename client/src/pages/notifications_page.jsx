@@ -1,10 +1,25 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { useAuth } from "../context/auth_context";
 import { useTheme } from "../context/theme_context";
 import ChatWidget from "../components/chat/chat_widget";
 import {
   getMyNotificationsResult,
   markNotificationRead,
 } from "../services/notifications_service";
+import { getProfilePath } from "../utils/profile_path";
+
+function getInitials(name, email) {
+  const source = name || email || "User";
+  return (
+    source
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "U"
+  );
+}
 
 function formatNotificationTime(value) {
   if (!value) {
@@ -15,6 +30,7 @@ function formatNotificationTime(value) {
 }
 
 function NotificationsPage() {
+  const { user } = useAuth();
   const { isDark } = useTheme();
   const [isMobileChatView, setIsMobileChatView] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(max-width: 767px)").matches : false
@@ -151,7 +167,11 @@ function NotificationsPage() {
 
       {!loading && !error && notifications.length > 0 ? (
         <div className="space-y-4">
-          {notifications.map((item) => (
+          {notifications.map((item) => {
+            const actor = item.actor || null;
+            const actorName = actor?.full_name || actor?.email || "";
+
+            return (
           <div
             key={item.id}
             className={`rounded-2xl border p-4 shadow-sm sm:p-5 ${
@@ -161,13 +181,38 @@ function NotificationsPage() {
             }`}
           >
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-              <div className="min-w-0">
-                <h3 className={`text-lg font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
-                  {item.title || "Notification"}
-                </h3>
+              <div className="flex min-w-0 items-start gap-3">
+                {actor?.id ? (
+                  <Link
+                    to={getProfilePath(actor.id, user?.id)}
+                    aria-label={`Open ${actorName || "user"} profile`}
+                    className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-[#f6e8ff] text-sm font-bold text-[#c446ff]"
+                  >
+                    {actor.avatar_url ? (
+                      <img src={actor.avatar_url} alt={actorName} className="h-full w-full object-cover" />
+                    ) : (
+                      getInitials(actor.full_name, actor.email)
+                    )}
+                  </Link>
+                ) : null}
+                <div className="min-w-0">
+                  <h3 className={`text-lg font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
+                    {item.title || "Notification"}
+                  </h3>
+                  {actor?.id ? (
+                    <Link
+                      to={getProfilePath(actor.id, user?.id)}
+                      className={`mt-1 block cursor-pointer truncate text-sm font-semibold transition ${
+                        isDark ? "text-slate-300 hover:text-sky-300" : "text-slate-700 hover:text-[#c446ff]"
+                      }`}
+                    >
+                      {actorName}
+                    </Link>
+                  ) : null}
                 <p className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-500">
                   {(item.type || "general").toString().replaceAll("_", " ")}
                 </p>
+                </div>
               </div>
               <span className="break-words text-xs uppercase tracking-[0.18em] text-slate-500 sm:tracking-[0.24em]">
                 {formatNotificationTime(item.created_at)}
@@ -208,7 +253,8 @@ function NotificationsPage() {
               ) : null}
             </div>
           </div>
-          ))}
+            );
+          })}
         </div>
       ) : null}
     </div>

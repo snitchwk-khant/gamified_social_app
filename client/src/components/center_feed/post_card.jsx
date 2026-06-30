@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../context/auth_context";
 import { useTheme } from "../../context/theme_context";
 import { supabase } from "../../lib/supabase";
+import { getProfilePath } from "../../utils/profile_path";
 import CommentForm from "./comment_form";
 import CommentList from "./comment_list";
 
@@ -231,7 +232,7 @@ function PostCard({
             const displayName = profile?.full_name || authorName || "";
             const displayAvatar = profile?.avatar_url ?? authorAvatar ?? null;
             const initial = (displayName?.charAt(0) || "").toUpperCase();
-            const profilePath = !isAnonymous && authorUserId ? `/profile/${authorUserId}` : null;
+            const profilePath = !isAnonymous && authorUserId ? getProfilePath(authorUserId, user?.id) : null;
 
             if (isAnonymous) {
               return (
@@ -253,7 +254,7 @@ function PostCard({
               );
 
               return profilePath ? (
-                <Link to={profilePath} aria-label={`Open ${displayName || "user"} profile`} className="shrink-0">
+                <Link to={profilePath} aria-label={`Open ${displayName || "user"} profile`} className="shrink-0 cursor-pointer">
                   {avatar}
                 </Link>
               ) : (
@@ -272,7 +273,7 @@ function PostCard({
             );
 
             return profilePath ? (
-              <Link to={profilePath} aria-label={`Open ${displayName || "user"} profile`} className="shrink-0">
+              <Link to={profilePath} aria-label={`Open ${displayName || "user"} profile`} className="shrink-0 cursor-pointer">
                 {avatarFallback}
               </Link>
             ) : (
@@ -286,7 +287,7 @@ function PostCard({
             </p>
           ) : (
             <Link
-              to={`/profile/${authorUserId}`}
+              to={getProfilePath(authorUserId, user?.id)}
               className={`truncate text-sm font-medium transition ${
                 isDark ? "text-slate-200 hover:text-sky-300" : "text-slate-900 hover:text-[#c446ff]"
               }`}

@@ -30,12 +30,14 @@ export async function getAdminUsers() {
 }
 
 export async function createAdminUser({ fullName, email, password, role }) {
+  const normalizedRole = ["admin", "accountant"].includes(role) ? role : "employee";
+
   const { data, error } = await supabase.functions.invoke("create-user", {
     body: {
       full_name: fullName,
       email,
       password,
-      role: role === "admin" ? "admin" : "employee",
+      role: normalizedRole,
     },
   });
 

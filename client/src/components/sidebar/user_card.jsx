@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useAuth } from "../../context/auth_context";
 import { useTheme } from "../../context/theme_context";
 
@@ -17,7 +18,9 @@ function UserCard() {
       }`}
     >
       <div className="flex items-center gap-4">
-        <div
+        <Link
+          to="/profile"
+          aria-label={`Open ${displayName} profile`}
           className={`flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border ${
             isDark ? "border-slate-700 bg-slate-950" : "border-slate-200 bg-white"
           }`}
@@ -29,11 +32,11 @@ function UserCard() {
               {initials}
             </span>
           )}
-        </div>
+        </Link>
         <div className="min-w-0">
-          <p className={`truncate text-sm font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
+          <Link to="/profile" className={`block cursor-pointer truncate text-sm font-semibold transition ${isDark ? "text-slate-100 hover:text-sky-300" : "text-slate-900 hover:text-[#c446ff]"}`}>
             {displayName}
-          </p>
+          </Link>
           <p className={`truncate text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
             {user?.email || "user@company.com"}
           </p>

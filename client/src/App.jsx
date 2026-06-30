@@ -11,6 +11,12 @@ import LoginPage from "./pages/login_page";
 import NotificationsPage from "./pages/notifications_page";
 import ProfilePage from "./pages/profile_page";
 import ChangePasswordPage from "./pages/change_password_page";
+import LeaderboardPage from "./pages/leaderboard_page";
+import MonthlyChampionsPage from "./pages/monthly_champions_page";
+import IndividualRankingPage from "./pages/individual_ranking_page";
+import ShopsPage from "./pages/shops_page";
+import ShopProfilePage from "./pages/shop_profile_page";
+import ChatWidget from "./components/chat/chat_widget";
 import { getProfile } from "./services/profile_service";
 
 function RequireAuth({ children }) {
@@ -217,7 +223,7 @@ function RequireAdmin({ children }) {
     );
   }
 
-  if (profileRole !== "admin") {
+  if (!["admin", "accountant"].includes(profileRole)) {
     return <AccessDeniedScreen />;
   }
 
@@ -272,8 +278,14 @@ function App() {
               >
                 <Route index element={<HomePage />} />
                 <Route path="notifications" element={<NotificationsPage />} />
+                <Route path="leaderboard" element={<LeaderboardPage />} />
+                <Route path="monthly-champions" element={<MonthlyChampionsPage />} />
+                <Route path="individual-ranking" element={<IndividualRankingPage />} />
+                <Route path="shops" element={<ShopsPage />} />
+                <Route path="gemify-room" element={<ChatWidget fullScreen />} />
                 <Route path="profile" element={<ProfilePage />} />
                 <Route path="profile/:userId" element={<ProfilePage />} />
+                <Route path="shop/:id" element={<ShopProfilePage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Route>
             </Routes>
