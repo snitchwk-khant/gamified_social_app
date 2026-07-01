@@ -80,7 +80,7 @@ function ShopLeaderboardTable({ rows = [], isDark = false }) {
 
 export default ShopLeaderboardTable;
 
-function AvatarGroup({ employees = [], isDark = false }) {
+export function AvatarGroup({ employees = [], isDark = false }) {
   const { user } = useAuth();
   const visibleEmployees = employees.slice(0, 3);
   const hiddenCount = Math.max(0, employees.length - visibleEmployees.length);

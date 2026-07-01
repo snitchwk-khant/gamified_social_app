@@ -17,6 +17,7 @@ function LoginPage() {
 
     try {
       const nextUser = await signIn({ email, password });
+      window.sessionStorage.setItem("gemify-show-welcome-leaderboard", nextUser?.id || "true");
       navigate(nextUser?.must_change_password ? "/change-password" : "/", { replace: true });
     } catch {
       setError("Invalid email or password");
