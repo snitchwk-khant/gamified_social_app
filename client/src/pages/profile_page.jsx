@@ -18,6 +18,7 @@ import {
 import { formatChampionMonth, getMonthlyChampionHistory } from "../services/monthly_champion_service";
 import { getSalesTargets } from "../services/sales_target_service";
 import { buildLeaderboard } from "../services/leaderboard_service";
+import { getLeaderboardDisplayPeriod } from "../services/leaderboard_settings_service";
 import { getPosts } from "../services/post_service";
 
 const EMPTY_FORM = {
@@ -50,15 +51,6 @@ const ZODIAC_OPTIONS = [
   "Aquarius",
   "Pisces",
 ];
-
-function getCurrentSalesPeriod() {
-  const now = new Date();
-
-  return {
-    month: now.getMonth() + 1,
-    year: now.getFullYear(),
-  };
-}
 
 function buildProfileAchievements(championHistory = [], currentPerformance = null) {
   const achievements = [];
@@ -174,7 +166,7 @@ function ProfilePage() {
       setEditing(false);
 
       try {
-        const currentPeriod = getCurrentSalesPeriod();
+        const currentPeriod = await getLeaderboardDisplayPeriod();
         const [profileData, statsData, albumData, postRows, championRows, currentTargetRows] = await Promise.all([
           isOwnProfile ? getProfile() : getProfileById(profileUserId),
           getProfileStats(profileUserId),

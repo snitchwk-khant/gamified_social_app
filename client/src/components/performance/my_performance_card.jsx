@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../../context/auth_context";
 import { useTheme } from "../../context/theme_context";
 import { getSalesTargets } from "../../services/sales_target_service";
 import { getCurrentUserRank } from "../../services/leaderboard_service";
+import { getLeaderboardDisplayPeriod } from "../../services/leaderboard_settings_service";
 
 const numberFormatter = new Intl.NumberFormat();
 const monthFormatter = new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" });
@@ -12,8 +13,11 @@ function getCurrentPeriod() {
   return {
     month: now.getMonth() + 1,
     year: now.getFullYear(),
-    label: monthFormatter.format(now),
   };
+}
+
+function getPeriodLabel(period) {
+  return monthFormatter.format(new Date(period.year, period.month - 1, 1));
 }
 
 function formatNumber(value) {
@@ -23,7 +27,7 @@ function formatNumber(value) {
 function MyPerformanceCard() {
   const { user } = useAuth();
   const { isDark } = useTheme();
-  const period = useMemo(getCurrentPeriod, []);
+  const [period, setPeriod] = useState(getCurrentPeriod);
   const [target, setTarget] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -38,7 +42,9 @@ function MyPerformanceCard() {
     setError("");
 
     try {
-      const targets = await getSalesTargets({ month: period.month, year: period.year });
+      const displayPeriod = await getLeaderboardDisplayPeriod();
+      const targets = await getSalesTargets(displayPeriod);
+      setPeriod(displayPeriod);
       setTarget(getCurrentUserRank(targets, user.id));
     } catch (err) {
       console.error("My performance load error:", err);
@@ -46,7 +52,7 @@ function MyPerformanceCard() {
     } finally {
       setLoading(false);
     }
-  }, [period.month, period.year, user?.id]);
+  }, [user?.id]);
 
   useEffect(() => {
     loadPerformance();
@@ -64,7 +70,7 @@ function MyPerformanceCard() {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#c446ff]">My Performance</p>
-          <h2 className="mt-1 text-xl font-semibold">{period.label}</h2>
+          <h2 className="mt-1 text-xl font-semibold">{getPeriodLabel(period)}</h2>
         </div>
       </div>
 

@@ -80,14 +80,15 @@ function ShopLeaderboardTable({ rows = [], isDark = false }) {
 
 export default ShopLeaderboardTable;
 
-export function AvatarGroup({ employees = [], isDark = false }) {
+export function AvatarGroup({ employees = [], isDark = false, size = "md" }) {
   const { user } = useAuth();
   const visibleEmployees = employees.slice(0, 3);
   const hiddenCount = Math.max(0, employees.length - visibleEmployees.length);
+  const avatarSizeClass = size === "sm" ? "h-8 w-8 text-xs" : "h-12 w-12 text-sm";
 
   return (
-    <div className="flex min-h-12 items-center">
-      <div className="flex -space-x-3">
+    <div className={size === "sm" ? "flex min-h-8 items-center" : "flex min-h-12 items-center"}>
+      <div className={size === "sm" ? "flex -space-x-2" : "flex -space-x-3"}>
         {visibleEmployees.map((employee) => {
           const employeeName = employee.full_name || employee.email || "Employee";
 
@@ -95,7 +96,7 @@ export function AvatarGroup({ employees = [], isDark = false }) {
             <Link
               to={getProfilePath(employee.id, user?.id)}
               key={employee.id}
-              className={`relative flex h-12 w-12 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 bg-[#f6e8ff] text-sm font-bold text-[#c446ff] shadow-sm transition hover:z-10 hover:-translate-y-0.5 focus:z-10 focus:outline-none focus:ring-2 focus:ring-[#c446ff]/60 ${
+              className={`relative flex ${avatarSizeClass} cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 bg-[#f6e8ff] font-bold text-[#c446ff] shadow-sm transition hover:z-10 hover:-translate-y-0.5 focus:z-10 focus:outline-none focus:ring-2 focus:ring-[#c446ff]/60 ${
                 isDark ? "border-slate-950" : "border-white"
               }`}
               aria-label={`Open ${employeeName} profile`}
@@ -112,7 +113,7 @@ export function AvatarGroup({ employees = [], isDark = false }) {
       </div>
       {hiddenCount ? (
         <span
-          className={`ml-2 rounded-full px-2.5 py-1 text-xs font-semibold ${
+          className={`ml-2 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
             isDark ? "bg-slate-800 text-slate-200" : "bg-slate-100 text-slate-600"
           }`}
         >

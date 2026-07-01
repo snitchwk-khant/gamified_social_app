@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { getSalesTargets, subscribeToSalesTargets } from "../services/sales_target_service";
 import { buildLeaderboard } from "../services/leaderboard_service";
+import { getLeaderboardDisplayPeriod } from "../services/leaderboard_settings_service";
 import { useAuth } from "../context/auth_context";
 import { useTheme } from "../context/theme_context";
 import { getProfilePath } from "../utils/profile_path";
@@ -13,9 +14,8 @@ function getCurrentMonthValue() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function parseMonthValue(value) {
-  const [year, month] = value.split("-").map((part) => Number.parseInt(part, 10));
-  return { month, year };
+function formatMonthValue(period) {
+  return `${period.year}-${String(period.month).padStart(2, "0")}`;
 }
 
 function formatNumber(value) {
@@ -56,11 +56,12 @@ function IndividualRankingPage() {
   const [error, setError] = useState("");
 
   const loadRanking = useCallback(async () => {
-    const period = parseMonthValue(monthValue);
     setLoading(true);
     setError("");
 
     try {
+      const period = await getLeaderboardDisplayPeriod();
+      setMonthValue(formatMonthValue(period));
       const rows = await getSalesTargets(period);
       setTargets(rows);
     } catch (err) {
@@ -69,7 +70,7 @@ function IndividualRankingPage() {
     } finally {
       setLoading(false);
     }
-  }, [monthValue]);
+  }, []);
 
   useEffect(() => {
     loadRanking();

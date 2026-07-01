@@ -4,6 +4,7 @@ import AdminRouteGate from "../components/admin_route_gate";
 import AdminPlaceholderPage from "../pages/admin_placeholder_page";
 import AdminUsersPage from "../pages/admin_users_page";
 import AnnouncementsPage from "../pages/announcements_page";
+import LeaderboardSettingsPage from "../pages/leaderboard_settings_page";
 import SalesTargetsPage from "../pages/sales_targets_page";
 import ShopHistoryPage from "../pages/shop_history_page";
 
@@ -57,6 +58,13 @@ export const adminRoutes = [
     label: "Shop History",
     title: "Shop History",
     icon: "reports",
+    allowedRoles: ["admin", "accountant"],
+  },
+  {
+    path: "leaderboard-settings",
+    label: "Leaderboard Settings",
+    title: "Leaderboard Settings",
+    icon: "settings",
     allowedRoles: ["admin", "accountant"],
   },
   {
@@ -125,6 +133,10 @@ export function createAdminRouteElement(route) {
 
   if (route.path === "shop-history") {
     page = <ShopHistoryPage />;
+  }
+
+  if (route.path === "leaderboard-settings") {
+    page = <LeaderboardSettingsPage />;
   }
 
   if (route.path === "announcements") {

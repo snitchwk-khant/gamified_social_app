@@ -7,6 +7,7 @@ import { AvatarGroup } from "../components/shops/shop_leaderboard_table";
 import UserSearch from "../components/user_search/user_search";
 import { useAuth } from "../context/auth_context";
 import { useTheme } from "../context/theme_context";
+import { getLeaderboardDisplayPeriod } from "../services/leaderboard_settings_service";
 import { getShopAssignmentEmployees, getShopSalesTargets } from "../services/shop_service";
 import { buildShopRankingCards } from "../services/shop_ranking_service";
 import { getShopPath } from "../utils/shop_path";
@@ -106,7 +107,7 @@ function MainLayout() {
   const [leaderboardRows, setLeaderboardRows] = useState([]);
   const [userShopSummary, setUserShopSummary] = useState(null);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
-  const [leaderboardPeriod] = useState(getCurrentPeriod);
+  const [leaderboardPeriod, setLeaderboardPeriod] = useState(getCurrentPeriod);
 
   useEffect(() => {
     if (!user?.id) {
@@ -132,8 +133,9 @@ function MainLayout() {
       setLeaderboardLoading(true);
 
       try {
+        const displayPeriod = await getLeaderboardDisplayPeriod();
         const [targets, employees] = await Promise.all([
-          getShopSalesTargets(leaderboardPeriod),
+          getShopSalesTargets(displayPeriod),
           getShopAssignmentEmployees(),
         ]);
         const rows = buildShopRankingCards(targets, employees);
@@ -142,6 +144,7 @@ function MainLayout() {
           return;
         }
 
+        setLeaderboardPeriod(displayPeriod);
         setLeaderboardRows(rows.length ? rows : PLACEHOLDER_LEADERBOARD);
         setUserShopSummary(getUserShopSummary(rows, employees, user.id));
       } catch (error) {
@@ -163,7 +166,7 @@ function MainLayout() {
     return () => {
       isMounted = false;
     };
-  }, [leaderboardPeriod, showHighlights, user?.id]);
+  }, [showHighlights, user?.id]);
 
   const handleCloseHighlights = () => {
     setShowHighlights(false);
@@ -204,29 +207,29 @@ function MainLayout() {
       />
 
       {showHighlights ? (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm">
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="welcome-leaderboard-title"
-            className={`animate-[welcome-leaderboard-in_200ms_ease-out] w-full max-w-xl rounded-[28px] border p-5 shadow-2xl sm:p-6 ${
+            className={`max-h-[75vh] w-[90vw] max-w-[380px] animate-[welcome-leaderboard-in_180ms_ease-out] overflow-hidden rounded-[20px] border p-4 shadow-2xl sm:max-w-md ${
               isDark ? "border-slate-800 bg-slate-900 text-slate-100" : "border-slate-200 bg-white text-slate-950"
             }`}
           >
             <div className="text-center">
-              <h2 id="welcome-leaderboard-title" className="text-2xl font-bold">
+              <h2 id="welcome-leaderboard-title" className="text-xl font-bold">
                 🏆 Welcome Back
               </h2>
-              <p className="mt-2 text-sm font-semibold text-[#c446ff]">{formatPeriodLabel(leaderboardPeriod)}</p>
+              <p className="mt-1 text-sm font-semibold text-[#c446ff]">{formatPeriodLabel(leaderboardPeriod)}</p>
             </div>
 
-            <div className="mt-5 space-y-3">
-              <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+            <div className="mt-4 space-y-2">
+              <p className={`text-[11px] font-semibold uppercase tracking-[0.16em] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
                 Top 5 Shops
               </p>
 
               {leaderboardLoading ? (
-                <div className={`rounded-2xl border px-4 py-8 text-center text-sm ${isDark ? "border-slate-800 bg-slate-950 text-slate-400" : "border-slate-200 bg-slate-50 text-slate-500"}`}>
+                <div className={`rounded-2xl border px-3 py-5 text-center text-sm ${isDark ? "border-slate-800 bg-slate-950 text-slate-400" : "border-slate-200 bg-slate-50 text-slate-500"}`}>
                   Loading leaderboard...
                 </div>
               ) : null}
@@ -249,51 +252,53 @@ function MainLayout() {
                           navigate(getShopPath(row.shop_id));
                         }
                       }}
-                      className={`grid gap-3 rounded-2xl border p-4 transition sm:grid-cols-[48px_1fr_auto] sm:items-center ${
+                      className={`border-b py-2.5 transition last:border-b-0 ${
                         row.shop_id ? "cursor-pointer hover:-translate-y-0.5" : ""
-                      } ${isDark ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-slate-50"}`}
+                      } ${isDark ? "border-slate-800" : "border-slate-100"}`}
                     >
-                      <div className="text-3xl sm:text-center">{formatRank(row.rank)}</div>
-                      <div className="min-w-0">
-                        {row.shop_id ? (
-                          <a
-                            href={getShopPath(row.shop_id)}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              setShowHighlights(false);
-                              navigate(getShopPath(row.shop_id));
-                            }}
-                            className={`truncate text-base font-semibold transition hover:text-[#c446ff] ${
-                              isDark ? "text-slate-100" : "text-slate-950"
-                            }`}
-                          >
-                            {row.shopName}
-                          </a>
-                        ) : (
-                          <p className={`truncate text-base font-semibold ${isDark ? "text-slate-100" : "text-slate-950"}`}>
-                            {row.shopName}
-                          </p>
-                        )}
-                        <div className="mt-3">
-                          <AvatarGroup employees={row.employees} isDark={isDark} />
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 shrink-0 text-xl leading-none">{formatRank(row.rank)}</div>
+                        <div className="min-w-0 flex-1">
+                          {row.shop_id ? (
+                            <a
+                              href={getShopPath(row.shop_id)}
+                              onClick={(event) => {
+                                event.preventDefault();
+                                setShowHighlights(false);
+                                navigate(getShopPath(row.shop_id));
+                              }}
+                              className={`block truncate text-sm font-semibold transition hover:text-[#c446ff] ${
+                                isDark ? "text-slate-100" : "text-slate-950"
+                              }`}
+                            >
+                              {row.shopName}
+                            </a>
+                          ) : (
+                            <p className={`truncate text-sm font-semibold ${isDark ? "text-slate-100" : "text-slate-950"}`}>
+                              {row.shopName}
+                            </p>
+                          )}
+                        </div>
+                        <div
+                          className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            row.achievement >= 100
+                              ? isDark
+                                ? "bg-emerald-950 text-emerald-200"
+                                : "bg-emerald-50 text-emerald-700"
+                              : row.achievement >= 80
+                                ? isDark
+                                  ? "bg-amber-950 text-amber-200"
+                                  : "bg-amber-50 text-amber-700"
+                                : isDark
+                                  ? "bg-rose-950 text-rose-200"
+                                  : "bg-rose-50 text-rose-700"
+                        }`}
+                      >
+                          {formatAchievement(row.achievement)}
                         </div>
                       </div>
-                      <div
-                        className={`w-fit rounded-full px-3 py-1 text-sm font-semibold sm:justify-self-end ${
-                          row.achievement >= 100
-                            ? isDark
-                              ? "bg-emerald-950 text-emerald-200"
-                              : "bg-emerald-50 text-emerald-700"
-                            : row.achievement >= 80
-                              ? isDark
-                                ? "bg-amber-950 text-amber-200"
-                                : "bg-amber-50 text-amber-700"
-                              : isDark
-                                ? "bg-rose-950 text-rose-200"
-                                : "bg-rose-50 text-rose-700"
-                      }`}
-                    >
-                        {formatAchievement(row.achievement)}
+                      <div className="mt-1.5 pl-10">
+                        <AvatarGroup employees={row.employees} isDark={isDark} size="sm" />
                       </div>
                     </div>
                   ))
@@ -315,14 +320,14 @@ function MainLayout() {
                       navigate(getShopPath(userShopSummary.shop_id));
                     }
                   }}
-                  className={`rounded-2xl border p-4 transition ${
+                  className={`mt-3 rounded-2xl border p-3 transition ${
                     userShopSummary?.shop_id ? "cursor-pointer hover:-translate-y-0.5" : ""
                   } ${isDark ? "border-[#c446ff]/40 bg-[#c446ff]/10" : "border-[#e8b7ff] bg-[#fdf7ff]"}`}
                 >
-                  <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${isDark ? "text-slate-300" : "text-slate-500"}`}>
+                  <p className={`text-[11px] font-semibold uppercase tracking-[0.16em] ${isDark ? "text-slate-300" : "text-slate-500"}`}>
                     🏪 Your Shop
                   </p>
-                  <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="mt-2 flex flex-col gap-2">
                     <div className="min-w-0">
                       {userShopSummary?.shop_id ? (
                         <a
@@ -345,10 +350,10 @@ function MainLayout() {
                       )}
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-700"}`}>
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-700"}`}>
                         Rank {userShopSummary?.rank ? `#${userShopSummary.rank}` : "--"}
                       </span>
-                      <span className="rounded-full bg-[#c446ff] px-3 py-1 text-xs font-semibold text-white">
+                      <span className="rounded-full bg-[#c446ff] px-2.5 py-1 text-xs font-semibold text-white">
                         Achievement {userShopSummary?.achievement != null ? formatAchievement(userShopSummary.achievement) : "--"}
                       </span>
                     </div>
@@ -357,11 +362,11 @@ function MainLayout() {
               ) : null}
             </div>
 
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <div className="mt-4 flex flex-col gap-2">
               <button
                 type="button"
                 onClick={handleCloseHighlights}
-                className={`rounded-full border px-5 py-3 text-sm font-semibold transition ${
+                className={`min-h-11 w-full rounded-full border px-4 py-2.5 text-sm font-semibold transition ${
                   isDark
                     ? "border-slate-700 text-slate-200 hover:bg-slate-800"
                     : "border-slate-200 text-slate-700 hover:bg-slate-50"
@@ -372,7 +377,7 @@ function MainLayout() {
               <button
                 type="button"
                 onClick={handleViewLeaderboard}
-                className="rounded-full bg-[#c446ff] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#ad32e3]"
+                className="min-h-11 w-full rounded-full bg-[#c446ff] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#ad32e3]"
               >
                 View Leaderboard
               </button>

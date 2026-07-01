@@ -8,6 +8,7 @@ import {
   subscribeToShopTargets,
 } from "../services/shop_service";
 import { buildShopRankingCards, buildTopShopCards } from "../services/shop_ranking_service";
+import { getLeaderboardDisplayPeriod } from "../services/leaderboard_settings_service";
 import { useTheme } from "../context/theme_context";
 
 function getCurrentMonthValue() {
@@ -15,9 +16,8 @@ function getCurrentMonthValue() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function parseMonthValue(value) {
-  const [year, month] = value.split("-").map((part) => Number.parseInt(part, 10));
-  return { month, year };
+function formatMonthValue(period) {
+  return `${period.year}-${String(period.month).padStart(2, "0")}`;
 }
 
 function LeaderboardPage() {
@@ -30,11 +30,12 @@ function LeaderboardPage() {
   const [error, setError] = useState("");
 
   const loadLeaderboard = useCallback(async () => {
-    const period = parseMonthValue(monthValue);
     setLoading(true);
     setError("");
 
     try {
+      const period = await getLeaderboardDisplayPeriod();
+      setMonthValue(formatMonthValue(period));
       const [targets, employees] = await Promise.all([
         getShopSalesTargets(period),
         getShopAssignmentEmployees(),
@@ -47,7 +48,7 @@ function LeaderboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [monthValue]);
+  }, []);
 
   useEffect(() => {
     loadLeaderboard();
