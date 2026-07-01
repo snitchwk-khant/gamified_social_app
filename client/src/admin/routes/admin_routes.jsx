@@ -1,9 +1,11 @@
+import { Navigate } from "react-router-dom";
 import AdminDashboardContent from "../components/admin_dashboard_content";
 import AdminRouteGate from "../components/admin_route_gate";
 import AdminPlaceholderPage from "../pages/admin_placeholder_page";
 import AdminUsersPage from "../pages/admin_users_page";
 import AnnouncementsPage from "../pages/announcements_page";
 import SalesTargetsPage from "../pages/sales_targets_page";
+import ShopHistoryPage from "../pages/shop_history_page";
 
 export const adminRoutes = [
   {
@@ -25,6 +27,36 @@ export const adminRoutes = [
     label: "Sales Targets",
     title: "Sales Targets",
     icon: "sales",
+    allowedRoles: ["admin", "accountant"],
+    redirectTo: "/admin/sales-targets/employees",
+    hideFromSidebar: true,
+  },
+  {
+    path: "sales-targets/employees",
+    label: "Employee Targets",
+    title: "Employee Targets",
+    icon: "sales",
+    allowedRoles: ["admin", "accountant"],
+  },
+  {
+    path: "sales-targets/shops",
+    label: "Shop Targets",
+    title: "Shop Targets",
+    icon: "sales",
+    allowedRoles: ["admin", "accountant"],
+  },
+  {
+    path: "manage-shops",
+    label: "Manage Shops",
+    title: "Manage Shops",
+    icon: "sales",
+    allowedRoles: ["admin", "accountant"],
+  },
+  {
+    path: "shop-history",
+    label: "Shop History",
+    title: "Shop History",
+    icon: "reports",
     allowedRoles: ["admin", "accountant"],
   },
   {
@@ -67,6 +99,10 @@ export const adminRoutes = [
 export function createAdminRouteElement(route) {
   let page = <AdminPlaceholderPage title={route.title} />;
 
+  if (route.redirectTo) {
+    page = <Navigate to={route.redirectTo} replace />;
+  }
+
   if (route.path === "dashboard") {
     page = <AdminDashboardContent />;
   }
@@ -75,8 +111,20 @@ export function createAdminRouteElement(route) {
     page = <AdminUsersPage />;
   }
 
-  if (route.path === "sales-targets") {
-    page = <SalesTargetsPage />;
+  if (route.path === "sales-targets/employees") {
+    page = <SalesTargetsPage mode="employees" />;
+  }
+
+  if (route.path === "sales-targets/shops") {
+    page = <SalesTargetsPage mode="shops" />;
+  }
+
+  if (route.path === "manage-shops") {
+    page = <SalesTargetsPage mode="manage-shops" />;
+  }
+
+  if (route.path === "shop-history") {
+    page = <ShopHistoryPage />;
   }
 
   if (route.path === "announcements") {

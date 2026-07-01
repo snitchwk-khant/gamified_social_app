@@ -282,6 +282,7 @@ function App() {
                 <Route path="monthly-champions" element={<MonthlyChampionsPage />} />
                 <Route path="individual-ranking" element={<IndividualRankingPage />} />
                 <Route path="shops" element={<ShopsPage />} />
+                <Route path="shops/:shopId" element={<ShopProfilePage />} />
                 <Route path="gemify-room" element={<ChatWidget fullScreen />} />
                 <Route path="profile" element={<ProfilePage />} />
                 <Route path="profile/:userId" element={<ProfilePage />} />

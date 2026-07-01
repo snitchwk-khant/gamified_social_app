@@ -76,10 +76,9 @@ function validateDraft(draft) {
   return errors;
 }
 
-function SalesTargetsPage() {
+function SalesTargetsPage({ mode = "employees" }) {
   const { user } = useAuth();
   const shopManagementFormRef = useRef(null);
-  const [activeTab, setActiveTab] = useState("employees");
   const [monthValue, setMonthValue] = useState(getCurrentMonthValue);
   const [searchTerm, setSearchTerm] = useState("");
   const [targets, setTargets] = useState([]);
@@ -90,7 +89,6 @@ function SalesTargetsPage() {
     shopId: "new",
     code: "",
     name: "",
-    location: "",
     is_active: true,
   });
   const [selectedShopEmployeeIds, setSelectedShopEmployeeIds] = useState([]);
@@ -128,6 +126,10 @@ function SalesTargetsPage() {
   const pendingEntries = useMemo(() => Object.entries(pendingChanges), [pendingChanges]);
   const hasPendingChanges = pendingEntries.length > 0;
   const isEditingShop = shopManagementForm.shopId !== "new";
+  const isEmployeeMode = mode === "employees";
+  const isShopMode = mode === "shops";
+  const isManageShopsMode = mode === "manage-shops";
+  const pageTitle = isEmployeeMode ? "Employee Targets" : isShopMode ? "Shop Targets" : "Manage Shops";
 
   const loadTargets = useCallback(async () => {
     const period = parseMonthValue(monthValue);
@@ -146,8 +148,12 @@ function SalesTargetsPage() {
   }, [monthValue]);
 
   useEffect(() => {
+    if (!isEmployeeMode) {
+      return;
+    }
+
     loadTargets();
-  }, [loadTargets]);
+  }, [isEmployeeMode, loadTargets]);
 
   const loadShopTargets = useCallback(async () => {
     const period = parseMonthValue(monthValue);
@@ -172,8 +178,12 @@ function SalesTargetsPage() {
   }, [monthValue]);
 
   useEffect(() => {
+    if (!isShopMode && !isManageShopsMode) {
+      return;
+    }
+
     loadShopTargets();
-  }, [loadShopTargets]);
+  }, [isManageShopsMode, isShopMode, loadShopTargets]);
 
   const loadEmployees = useCallback(async () => {
     setEmployeesLoading(true);
@@ -277,6 +287,20 @@ function SalesTargetsPage() {
     }));
   }, [shopEmployees, shops]);
 
+  const filteredShopManagementRows = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
+    if (!normalizedSearch) {
+      return shopManagementRows;
+    }
+
+    return shopManagementRows.filter((shop) =>
+      [shop.name, shop.code].some((value) =>
+        value?.toString().toLowerCase().includes(normalizedSearch)
+      )
+    );
+  }, [searchTerm, shopManagementRows]);
+
   const filteredShopEmployees = useMemo(() => {
     const normalizedSearch = shopEmployeeSearch.trim().toLowerCase();
 
@@ -332,7 +356,6 @@ function SalesTargetsPage() {
         shopId: shop.id,
         code: shop.code || "",
         name: shop.name || "",
-        location: shop.location || "",
         is_active: shop.is_active !== false,
       });
       setSelectedShopEmployeeIds(getEmployeeIdsForShop(shop.id));
@@ -345,7 +368,6 @@ function SalesTargetsPage() {
       shopId: "new",
       code: "",
       name: "",
-      location: "",
       is_active: true,
     });
     setSelectedShopEmployeeIds([]);
@@ -751,29 +773,10 @@ function SalesTargetsPage() {
       <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 className="text-2xl font-semibold text-slate-950">Sales Targets</h2>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {[
-                ["employees", "Employee Targets"],
-                ["shops", "Shop Targets"],
-              ].map(([tab, label]) => (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setActiveTab(tab)}
-                  className={`rounded-full px-4 py-2 text-xs font-semibold transition ${
-                    activeTab === tab
-                      ? "bg-[#c446ff] text-white"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+            <h2 className="text-2xl font-semibold text-slate-950">{pageTitle}</h2>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
-            {activeTab === "employees" ? (
+            {isEmployeeMode ? (
               <button
                 type="button"
                 onClick={openAssignModal}
@@ -782,21 +785,23 @@ function SalesTargetsPage() {
                 + Assign Sales Target
               </button>
             ) : null}
-            <input
-              type="month"
-              value={monthValue}
-              onChange={(event) => handleMonthChange(event.target.value)}
-              className="h-11 min-w-0 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-[#c446ff] focus:bg-white sm:w-48"
-              aria-label="Select month"
-            />
+            {isManageShopsMode ? null : (
+              <input
+                type="month"
+                value={monthValue}
+                onChange={(event) => handleMonthChange(event.target.value)}
+                className="h-11 min-w-0 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-[#c446ff] focus:bg-white sm:w-48"
+                aria-label="Select month"
+              />
+            )}
             <input
               type="search"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search employee"
+              placeholder={isEmployeeMode ? "Search employee" : "Search shop"}
               className="h-11 min-w-0 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#c446ff] focus:bg-white sm:w-64"
             />
-            {activeTab === "employees" ? (
+            {isEmployeeMode ? (
               <button
                 type="button"
                 onClick={handleSaveAll}
@@ -822,7 +827,7 @@ function SalesTargetsPage() {
         ) : null}
       </div>
 
-      {activeTab === "employees" ? (
+      {isEmployeeMode ? (
       <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
         <div className="overflow-x-auto">
           <table className="min-w-[860px] w-full text-left text-sm">
@@ -915,7 +920,7 @@ function SalesTargetsPage() {
       </div>
       ) : null}
 
-      {activeTab === "shops" ? (
+      {isManageShopsMode ? (
         <>
           <form
             ref={shopManagementFormRef}
@@ -941,7 +946,7 @@ function SalesTargetsPage() {
               </button>
             </div>
 
-            <div className="mt-5 grid gap-4 lg:grid-cols-4">
+            <div className="mt-5 grid gap-4 lg:grid-cols-3">
               <label className="block text-sm font-medium text-slate-700">
                 Existing Shop
                 <select
@@ -979,15 +984,6 @@ function SalesTargetsPage() {
                 {shopErrors.name ? <p className="mt-1 text-xs text-rose-600">{shopErrors.name}</p> : null}
               </label>
 
-              <label className="block text-sm font-medium text-slate-700">
-                Location
-                <input
-                  value={shopManagementForm.location}
-                  onChange={(event) => updateShopManagementForm("location", event.target.value)}
-                  className="mt-2 h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-950 outline-none transition focus:border-[#c446ff] focus:bg-white"
-                  placeholder="Location"
-                />
-              </label>
             </div>
 
             <div className="mt-4 flex flex-col gap-4 lg:flex-row">
@@ -1098,8 +1094,8 @@ function SalesTargetsPage() {
                         Loading shops...
                       </td>
                     </tr>
-                  ) : shopManagementRows.length ? (
-                    shopManagementRows.map((shop) => (
+                  ) : filteredShopManagementRows.length ? (
+                    filteredShopManagementRows.map((shop) => (
                       <tr key={shop.id} className="text-slate-700">
                         <td className="px-5 py-4 font-semibold text-slate-950">{shop.name}</td>
                         <td className="px-5 py-4">{shop.code || "N/A"}</td>
@@ -1148,7 +1144,11 @@ function SalesTargetsPage() {
               </table>
             </div>
           </div>
+        </>
+      ) : null}
 
+      {isShopMode ? (
+        <>
           <form
             onSubmit={handleSaveShopTarget}
             className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]"

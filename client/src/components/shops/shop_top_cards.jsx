@@ -1,6 +1,7 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/auth_context";
 import { getProfilePath } from "../../utils/profile_path";
+import { getShopPath } from "../../utils/shop_path";
 
 const numberFormatter = new Intl.NumberFormat();
 
@@ -40,30 +41,54 @@ function getAchievementClass(achievement, isDark) {
 }
 
 function ShopTopCards({ rows = [], isDark = false }) {
+  const navigate = useNavigate();
+
   if (!rows.length) {
     return null;
   }
+
+  const handleOpenShop = (event, shopId) => {
+    if (event.target.closest("a")) {
+      return;
+    }
+
+    navigate(getShopPath(shopId));
+  };
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       {rows.map((target) => (
         <div
           key={target.id}
-          className={`rounded-2xl border p-5 ${
+          role="link"
+          tabIndex={0}
+          onClick={(event) => handleOpenShop(event, target.shop_id)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              navigate(getShopPath(target.shop_id));
+            }
+          }}
+          className={`cursor-pointer rounded-2xl border p-5 transition hover:-translate-y-0.5 ${
             isDark ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-white"
           }`}
         >
           <div className="flex items-start justify-between gap-4">
-            <span className="text-3xl">{formatRank(target.rank)}</span>
-            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getAchievementClass(target.achievement, isDark)}`}>
-              {formatNumber(target.achievement)}%
-            </span>
-          </div>
-          <div className="mt-5">
-            <AvatarGroup employees={target.employees} isDark={isDark} />
-            <p className={`mt-4 truncate text-base font-semibold ${isDark ? "text-slate-100" : "text-slate-950"}`}>
+            <Link
+              to={getShopPath(target.shop_id)}
+              className={`min-w-0 truncate text-lg font-semibold transition hover:text-[#c446ff] ${isDark ? "text-slate-100" : "text-slate-950"}`}
+            >
               {target.shopName}
-            </p>
+            </Link>
+            <span className="shrink-0 text-3xl">{formatRank(target.rank)}</span>
+          </div>
+          <div className="mt-5 space-y-4">
+            <AvatarGroup employees={target.employees} isDark={isDark} />
+            <div>
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getAchievementClass(target.achievement, isDark)}`}>
+                {formatNumber(target.achievement)}%
+              </span>
+            </div>
           </div>
         </div>
       ))}

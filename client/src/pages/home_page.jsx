@@ -4,7 +4,6 @@ import { useAuth } from "../context/auth_context";
 import * as postService from "../services/post_service";
 import * as storiesService from "../services/stories_service";
 import { getActiveAnnouncements } from "../services/announcement_service";
-import MonthlyChampionCard from "../components/champions/monthly_champion_card";
 import FeedWidget from "../components/center_feed/feed_widget";
 import StoryViewer from "../components/story/story_viewer";
 import { useTheme } from "../context/theme_context";
@@ -865,8 +864,6 @@ function HomePage() {
           onChange={handleStoryFileChange}
         />
       </section>
-
-      <MonthlyChampionCard />
 
       <FeedWidget
         posts={posts}

@@ -33,7 +33,7 @@ function AdminSidebar({ isOpen, onClose }) {
   const location = useLocation();
   const role = user?.role?.toString().trim().toLowerCase() || "employee";
   const roleLabel = role === "accountant" ? "Accountant" : "Admin";
-  const visibleRoutes = adminRoutes.filter((item) => item.allowedRoles.includes(role));
+  const visibleRoutes = adminRoutes.filter((item) => item.allowedRoles.includes(role) && !item.hideFromSidebar);
 
   const navLinkClass = (isActive) =>
     `flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${

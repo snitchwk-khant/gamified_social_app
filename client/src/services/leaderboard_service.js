@@ -19,6 +19,7 @@ export function buildLeaderboard(targets = [], { currentUserId = "", searchTerm 
 
     return {
       ...target,
+      employeeId: target.user_id,
       displayName: profile.full_name || profile.email || "Unnamed employee",
       email: profile.email || "",
       avatarUrl: profile.avatar_url || "",
@@ -38,6 +39,7 @@ export function buildLeaderboard(targets = [], { currentUserId = "", searchTerm 
 
   const leaderboardRows = buildPerformanceRanking(searchedTargets, {
     getName: (target) => target.displayName,
+    useUpdatedAtTieBreaker: true,
   });
 
   return leaderboardRows;

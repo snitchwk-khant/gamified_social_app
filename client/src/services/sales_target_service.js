@@ -214,11 +214,27 @@ export async function upsertSalesTarget({ userId, user_id, month, year, targetSa
   return data;
 }
 
+export function subscribeToSalesTargets(onChange) {
+  const channel = supabase
+    .channel("sales-targets-realtime")
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "sales_targets" },
+      onChange
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}
+
 export default {
   getSalesTargets,
   getUserSalesTarget,
   getSalesTargetEmployees,
   assignSalesTarget,
   upsertSalesTarget,
+  subscribeToSalesTargets,
   calculateAchievement,
 };

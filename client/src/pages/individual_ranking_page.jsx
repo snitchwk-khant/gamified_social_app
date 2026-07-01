@@ -1,12 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  getShopAssignmentEmployees,
-  getShopSalesTargets,
-  subscribeToShopAssignments,
-  subscribeToShopTargets,
-} from "../services/shop_service";
-import { buildEmployeeShopLeaderboard } from "../services/shop_ranking_service";
+import { getSalesTargets, subscribeToSalesTargets } from "../services/sales_target_service";
+import { buildLeaderboard } from "../services/leaderboard_service";
 import { useAuth } from "../context/auth_context";
 import { useTheme } from "../context/theme_context";
 import { getProfilePath } from "../utils/profile_path";
@@ -56,8 +51,7 @@ function IndividualRankingPage() {
   const { isDark } = useTheme();
   const [monthValue, setMonthValue] = useState(getCurrentMonthValue);
   const [searchTerm, setSearchTerm] = useState("");
-  const [shopTargets, setShopTargets] = useState([]);
-  const [employees, setEmployees] = useState([]);
+  const [targets, setTargets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -67,12 +61,8 @@ function IndividualRankingPage() {
     setError("");
 
     try {
-      const [targets, employeeRows] = await Promise.all([
-        getShopSalesTargets(period),
-        getShopAssignmentEmployees(),
-      ]);
-      setShopTargets(targets);
-      setEmployees(employeeRows);
+      const rows = await getSalesTargets(period);
+      setTargets(rows);
     } catch (err) {
       console.error("Individual ranking load error:", err);
       setError(err?.message || "Unable to load individual ranking.");
@@ -86,20 +76,16 @@ function IndividualRankingPage() {
   }, [loadRanking]);
 
   useEffect(() => {
-    return subscribeToShopTargets(loadRanking);
-  }, [loadRanking]);
-
-  useEffect(() => {
-    return subscribeToShopAssignments(loadRanking);
+    return subscribeToSalesTargets(loadRanking);
   }, [loadRanking]);
 
   const rankingRows = useMemo(() => {
-    return buildEmployeeShopLeaderboard(shopTargets, employees, { currentUserId: user?.id, searchTerm });
-  }, [employees, searchTerm, shopTargets, user?.id]);
+    return buildLeaderboard(targets, { currentUserId: user?.id, searchTerm });
+  }, [searchTerm, targets, user?.id]);
 
   const hasMonthlyRecords = useMemo(() => {
-    return buildEmployeeShopLeaderboard(shopTargets, employees, { currentUserId: user?.id }).length > 0;
-  }, [employees, shopTargets, user?.id]);
+    return buildLeaderboard(targets, { currentUserId: user?.id }).length > 0;
+  }, [targets, user?.id]);
 
   return (
     <section className="space-y-5">
@@ -112,7 +98,7 @@ function IndividualRankingPage() {
           <div>
             <h1 className="text-2xl font-semibold">Individual Ranking</h1>
             <p className={isDark ? "mt-1 text-sm text-slate-400" : "mt-1 text-sm text-slate-500"}>
-              Employee ranking by current shop achievement
+              Employee ranking by individual sales target achievement
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -179,7 +165,8 @@ function IndividualRankingPage() {
                   <th className="px-5 py-4 font-semibold">Rank</th>
                   <th className="px-5 py-4 font-semibold">Avatar</th>
                   <th className="px-5 py-4 font-semibold">Employee Name</th>
-                  <th className="px-5 py-4 font-semibold">Shop Name</th>
+                  <th className="px-5 py-4 font-semibold">Current Sales</th>
+                  <th className="px-5 py-4 font-semibold">Target Sales</th>
                   <th className="px-5 py-4 font-semibold">Achievement %</th>
                 </tr>
               </thead>
@@ -224,7 +211,8 @@ function IndividualRankingPage() {
                         ) : null}
                       </div>
                     </td>
-                    <td className="px-5 py-4">{target.shopName}</td>
+                    <td className="px-5 py-4">{formatNumber(target.current_sales)}</td>
+                    <td className="px-5 py-4">{formatNumber(target.target_sales)}</td>
                     <td className="px-5 py-4">
                       <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getAchievementClass(target.achievement, isDark)}`}>
                         {formatNumber(target.achievement)}%

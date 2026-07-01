@@ -36,6 +36,16 @@ const SHOP_CHAMPION_FIELDS = [
   `shop:shops!shop_monthly_champions_shop_id_fkey(${SHOP_FIELDS})`,
 ].join(",");
 
+const SHOP_HISTORY_EMPLOYEE_FIELDS = [
+  "id",
+  "shop_id",
+  "year",
+  "month",
+  "employee_id",
+  "created_at",
+  "employee:profiles!shop_history_employees_employee_id_fkey(id,full_name,email,avatar_url,role)",
+].join(",");
+
 function normalizeNumber(value) {
   return Math.max(0, Number(value) || 0);
 }
@@ -349,6 +359,111 @@ export async function upsertShopSalesTarget({ shopId, shop_id, month, year, targ
   return data;
 }
 
+export async function deleteShopSalesTarget(targetId) {
+  if (!targetId) {
+    throw new Error("Shop target id is required.");
+  }
+
+  const { data, error } = await supabase
+    .from("shop_sales_targets")
+    .delete()
+    .eq("id", targetId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message || "Unable to delete shop sales target.");
+  }
+
+  if (!data?.id) {
+    throw new Error("Shop sales target was not found.");
+  }
+
+  return data;
+}
+
+export async function getShopHistoryEmployees({ shopId = null, month = null, year = null } = {}) {
+  let query = supabase
+    .from("shop_history_employees")
+    .select(SHOP_HISTORY_EMPLOYEE_FIELDS)
+    .order("year", { ascending: false })
+    .order("month", { ascending: false })
+    .order("created_at", { ascending: true });
+
+  if (shopId) query = query.eq("shop_id", shopId);
+  if (month) query = query.eq("month", normalizeInteger(month));
+  if (year) query = query.eq("year", normalizeInteger(year));
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message || "Unable to load shop history employees.");
+  }
+
+  return data || [];
+}
+
+export async function saveShopHistoryEmployees({ shopId, month, year, employeeIds = [] }) {
+  if (!shopId) {
+    throw new Error("Shop is required.");
+  }
+
+  const period = validatePeriod(month, year);
+  const normalizedEmployeeIds = [...new Set(employeeIds.filter(Boolean))];
+
+  const { error: deleteError } = await supabase
+    .from("shop_history_employees")
+    .delete()
+    .eq("shop_id", shopId)
+    .eq("month", period.month)
+    .eq("year", period.year);
+
+  if (deleteError) {
+    throw new Error(deleteError.message || "Unable to update shop history employees.");
+  }
+
+  if (normalizedEmployeeIds.length) {
+    const { error: insertError } = await supabase
+      .from("shop_history_employees")
+      .insert(
+        normalizedEmployeeIds.map((employeeId) => ({
+          employee_id: employeeId,
+          month: period.month,
+          shop_id: shopId,
+          year: period.year,
+        }))
+      );
+
+    if (insertError) {
+      throw new Error(insertError.message || "Unable to save shop history employees.");
+    }
+  }
+
+  return getShopHistoryEmployees({
+    shopId,
+    month: period.month,
+    year: period.year,
+  });
+}
+
+export async function deleteShopHistoryEmployees({ shopId, month, year }) {
+  if (!shopId) {
+    throw new Error("Shop is required.");
+  }
+
+  const period = validatePeriod(month, year);
+  const { error } = await supabase
+    .from("shop_history_employees")
+    .delete()
+    .eq("shop_id", shopId)
+    .eq("month", period.month)
+    .eq("year", period.year);
+
+  if (error) {
+    throw new Error(error.message || "Unable to delete shop history employees.");
+  }
+}
+
 export function buildShopLeaderboard(targets = [], { searchTerm = "" } = {}) {
   return buildPerformanceRanking(targets, {
     searchTerm,
@@ -430,17 +545,21 @@ export default {
   calculateAchievement,
   createShop,
   deleteShop,
+  deleteShopHistoryEmployees,
+  deleteShopSalesTarget,
   getEmployeeActiveShopAssignment,
   getShopById,
   getShopChampionHistory,
   getShopAssignmentEmployees,
   getShopEmployeeCounts,
   getShopEmployees,
+  getShopHistoryEmployees,
   getShopMonthlyChampion,
   getShopSalesTargets,
   getShops,
   subscribeToShopAssignments,
   subscribeToShopTargets,
+  saveShopHistoryEmployees,
   updateShop,
   updateShopEmployees,
   upsertShopSalesTarget,

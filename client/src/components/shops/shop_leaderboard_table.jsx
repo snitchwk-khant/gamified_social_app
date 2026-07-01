@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/auth_context";
 import { getProfilePath } from "../../utils/profile_path";
+import { getShopPath } from "../../utils/shop_path";
 
 const numberFormatter = new Intl.NumberFormat();
 
@@ -47,8 +48,8 @@ function ShopLeaderboardTable({ rows = [], isDark = false }) {
         >
           <tr>
             <th className="px-4 py-3 font-semibold">Rank</th>
-            <th className="px-4 py-3 font-semibold">Employee Avatar Group</th>
             <th className="px-4 py-3 font-semibold">Shop Name</th>
+            <th className="px-4 py-3 font-semibold">Employee Avatar Group</th>
             <th className="px-4 py-3 text-right font-semibold">Achievement %</th>
           </tr>
         </thead>
@@ -56,13 +57,13 @@ function ShopLeaderboardTable({ rows = [], isDark = false }) {
           {rows.map((target) => (
             <tr key={target.id} className={isDark ? "text-slate-300" : "text-slate-700"}>
               <td className="px-4 py-4 font-semibold">{formatRank(target.rank)}</td>
-              <td className="px-4 py-4">
-                <AvatarGroup employees={target.employees} isDark={isDark} />
-              </td>
               <td className={`px-4 py-4 font-semibold ${isDark ? "text-slate-100" : "text-slate-950"}`}>
-                <Link to={`/shop/${target.shop_id}`} className="transition hover:text-[#c446ff]">
+                <Link to={getShopPath(target.shop_id)} className="transition hover:text-[#c446ff]">
                   {target.shopName}
                 </Link>
+              </td>
+              <td className="px-4 py-4">
+                <AvatarGroup employees={target.employees} isDark={isDark} />
               </td>
               <td className="px-4 py-4 text-right">
                 <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getAchievementClass(target.achievement, isDark)}`}>
