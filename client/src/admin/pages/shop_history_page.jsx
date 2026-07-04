@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { getShops } from "../../services/shop_service";
+import { AvatarGroup } from "../../components/shops/shop_leaderboard_table";
+import {
+  deleteShopHistoryEmployees,
+  deleteShopSalesTarget,
+  getShopAssignmentEmployees,
+  getShopHistoryEmployees,
+  getShopSalesTargets,
+  getShops,
+  saveShopHistoryEmployees,
+  upsertShopSalesTarget,
+} from "../../services/shop_service";
 
 const numberFormatter = new Intl.NumberFormat();
 const monthFormatter = new Intl.DateTimeFormat("en", { month: "long", year: "numeric" });
@@ -16,14 +26,6 @@ const monthOptions = [
   ["10", "October"],
   ["11", "November"],
   ["12", "December"],
-];
-
-const mockEmployees = [
-  { id: "employee-1", full_name: "Bhone Pyae", email: "bhone@gemify.local" },
-  { id: "employee-2", full_name: "Sai", email: "sai@gemify.local" },
-  { id: "employee-3", full_name: "HMS", email: "hms@gemify.local" },
-  { id: "employee-4", full_name: "Jue Jue", email: "jue@gemify.local" },
-  { id: "employee-5", full_name: "Ko Ko Kyaw", email: "koko@gemify.local" },
 ];
 
 function getDefaultHistoryPeriod() {
@@ -43,10 +45,10 @@ function getInitialForm() {
     employeeOfMonthId: "",
     month: period.month,
     notes: "",
-    reachedSales: "1280",
+    reachedSales: "",
     recordId: "",
     shopId: "",
-    targetSales: "1000",
+    targetSales: "",
     year: period.year,
   };
 }
@@ -73,42 +75,80 @@ function calculateAchievement(targetSales, reachedSales) {
   return Math.round((Number(reachedSales || 0) / target) * 100);
 }
 
+function getProgressWidth(achievement) {
+  return `${Math.min(100, Math.max(0, Number(achievement || 0)))}%`;
+}
+
+function getProgressColor(achievement) {
+  if (achievement >= 150) {
+    return "from-amber-300 to-yellow-500";
+  }
+
+  if (achievement >= 100) {
+    return "from-emerald-400 to-emerald-600";
+  }
+
+  if (achievement >= 80) {
+    return "from-sky-400 to-blue-600";
+  }
+
+  return "from-slate-300 to-slate-500";
+}
+
 function getEmployeeName(employee) {
   return employee?.full_name || employee?.email || "Unnamed employee";
 }
 
-function buildMockHistoryRecords() {
-  return [
-    {
-      employeeIds: ["employee-1", "employee-2", "employee-4"],
-      employeeOfMonthId: "employee-1",
-      id: "history-1",
-      month: "6",
-      notes: "Strong closing week and excellent team follow-up after the mid-month push.",
-      reachedSales: "1280",
-      shopId: "official",
-      targetSales: "1000",
-      year: "2026",
-    },
-    {
-      employeeIds: ["employee-3", "employee-5"],
-      employeeOfMonthId: "employee-3",
-      id: "history-2",
-      month: "5",
-      notes: "Consistent daily activity with a late-month improvement in conversion.",
-      reachedSales: "890",
-      shopId: "myanmar",
-      targetSales: "900",
-      year: "2026",
-    },
-  ];
+function getShopName(shops, shopId) {
+  const shop = shops.find((item) => item.id === shopId);
+
+  return shop?.name || shopId || "Unassigned shop";
+}
+
+function getRecordEmployees(record, employees) {
+  return employees.filter((employee) => record.employeeIds.includes(employee.id));
+}
+
+function buildHistoryRecords(targets = [], historyEmployees = []) {
+  const employeesByPeriod = historyEmployees.reduce((groups, row) => {
+    const key = `${row.shop_id}-${row.year}-${row.month}`;
+
+    if (!groups.has(key)) {
+      groups.set(key, []);
+    }
+
+    if (row.employee_id) {
+      groups.get(key).push(row.employee_id);
+    }
+
+    return groups;
+  }, new Map());
+
+  return targets.map((target) => {
+    const key = `${target.shop_id}-${target.year}-${target.month}`;
+
+    return {
+      employeeIds: employeesByPeriod.get(key) || [],
+      employeeOfMonthId: "",
+      id: target.id,
+      month: String(target.month),
+      notes: "",
+      reachedSales: String(target.current_sales ?? ""),
+      shopId: target.shop_id,
+      targetSales: String(target.target_sales ?? ""),
+      year: String(target.year),
+    };
+  });
 }
 
 function ShopHistoryPage() {
-  const [records, setRecords] = useState(buildMockHistoryRecords);
+  const [records, setRecords] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [shops, setShops] = useState([]);
   const [shopsLoading, setShopsLoading] = useState(true);
   const [shopsError, setShopsError] = useState("");
+  const [recordsLoading, setRecordsLoading] = useState(true);
+  const [recordsError, setRecordsError] = useState("");
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState([]);
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [form, setForm] = useState(getInitialForm);
@@ -120,30 +160,42 @@ function ShopHistoryPage() {
   useEffect(() => {
     let isMounted = true;
 
-    async function loadShops() {
+    async function loadShopHistory() {
       setShopsLoading(true);
+      setRecordsLoading(true);
       setShopsError("");
+      setRecordsError("");
 
       try {
-        const shopRows = await getShops();
+        const [shopRows, employeeRows, targetRows, historyEmployeeRows] = await Promise.all([
+          getShops(),
+          getShopAssignmentEmployees(),
+          getShopSalesTargets(),
+          getShopHistoryEmployees(),
+        ]);
 
         if (isMounted) {
           setShops(shopRows);
+          setEmployees(employeeRows);
+          setRecords(buildHistoryRecords(targetRows, historyEmployeeRows));
         }
       } catch (err) {
-        console.error("Shop history shops load error:", err);
+        console.error("Shop history load error:", err);
 
         if (isMounted) {
-          setShopsError(err?.message || "Unable to load shops.");
+          const message = err?.message || "Unable to load shop history.";
+          setShopsError(message);
+          setRecordsError(message);
         }
       } finally {
         if (isMounted) {
           setShopsLoading(false);
+          setRecordsLoading(false);
         }
       }
     }
 
-    loadShops();
+    loadShopHistory();
 
     return () => {
       isMounted = false;
@@ -154,23 +206,23 @@ function ShopHistoryPage() {
     const normalizedSearch = employeeSearch.trim().toLowerCase();
 
     if (!normalizedSearch) {
-      return mockEmployees;
+      return employees;
     }
 
-    return mockEmployees.filter((employee) =>
+    return employees.filter((employee) =>
       [employee.full_name, employee.email].some((value) =>
         value?.toString().toLowerCase().includes(normalizedSearch)
       )
     );
-  }, [employeeSearch]);
+  }, [employeeSearch, employees]);
 
   const employeeOfMonthOptions = useMemo(() => {
     if (!selectedEmployeeIds.length) {
-      return mockEmployees;
+      return employees;
     }
 
-    return mockEmployees.filter((employee) => selectedEmployeeIds.includes(employee.id));
-  }, [selectedEmployeeIds]);
+    return employees.filter((employee) => selectedEmployeeIds.includes(employee.id));
+  }, [employees, selectedEmployeeIds]);
 
   const visibleRows = useMemo(() => {
     if (!form.shopId) {
@@ -225,8 +277,9 @@ function ShopHistoryPage() {
     return nextErrors;
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
+    setRecordsError("");
 
     const nextErrors = validateForm();
     setErrors(nextErrors);
@@ -235,25 +288,35 @@ function ShopHistoryPage() {
       return;
     }
 
-    const nextRecord = {
-      employeeIds: selectedEmployeeIds,
-      employeeOfMonthId: form.employeeOfMonthId,
-      id: form.recordId || `history-${Date.now()}`,
-      month: form.month,
-      notes: form.notes.trim(),
-      reachedSales: form.reachedSales,
-      shopId: form.shopId,
-      targetSales: form.targetSales,
-      year: form.year,
-    };
+    try {
+      const savedTarget = await upsertShopSalesTarget({
+        currentSales: form.reachedSales,
+        month: form.month,
+        shopId: form.shopId,
+        targetSales: form.targetSales,
+        year: form.year,
+      });
+      const savedEmployees = await saveShopHistoryEmployees({
+        employeeIds: selectedEmployeeIds,
+        month: form.month,
+        shopId: form.shopId,
+        year: form.year,
+      });
+      const nextRecord = buildHistoryRecords([savedTarget], savedEmployees)[0];
 
-    setRecords((current) =>
-      isEditing
-        ? current.map((record) => (record.id === form.recordId ? nextRecord : record))
-        : [nextRecord, ...current]
-    );
-    resetForm();
-    setNotice(isEditing ? "Shop history updated in preview." : "Shop history saved in preview.");
+      setRecords((current) => {
+        const withoutExistingPeriod = current.filter((record) => {
+          return !(record.shopId === nextRecord.shopId && record.month === nextRecord.month && record.year === nextRecord.year);
+        });
+
+        return [nextRecord, ...withoutExistingPeriod];
+      });
+      resetForm();
+      setNotice(isEditing ? "Shop history updated." : "Shop history saved.");
+    } catch (err) {
+      console.error("Shop history save error:", err);
+      setRecordsError(err?.message || "Unable to save shop history.");
+    }
   };
 
   const handleEdit = (record) => {
@@ -304,14 +367,32 @@ function ShopHistoryPage() {
     }
   };
 
-  const handleDelete = (recordId) => {
-    setRecords((current) => current.filter((record) => record.id !== recordId));
+  const handleDelete = async (recordId) => {
+    setRecordsError("");
+    const record = records.find((item) => item.id === recordId);
 
-    if (form.recordId === recordId) {
-      resetForm();
+    if (!record) {
+      return;
     }
 
-    setNotice("Shop history removed from preview.");
+    try {
+      await deleteShopHistoryEmployees({
+        month: record.month,
+        shopId: record.shopId,
+        year: record.year,
+      });
+      await deleteShopSalesTarget(recordId);
+      setRecords((current) => current.filter((item) => item.id !== recordId));
+
+      if (form.recordId === recordId) {
+        resetForm();
+      }
+
+      setNotice("Shop history removed.");
+    } catch (err) {
+      console.error("Shop history delete error:", err);
+      setRecordsError(err?.message || "Unable to delete shop history.");
+    }
   };
 
   return (
@@ -511,70 +592,75 @@ function ShopHistoryPage() {
         </div>
       </form>
 
-      <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+      <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
         <div className="border-b border-slate-200 px-5 py-4">
           <h3 className="text-xl font-semibold text-slate-950">History Records</h3>
         </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-[760px] w-full text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-[0.18em] text-slate-500">
-              <tr>
-                <th className="px-5 py-4 font-semibold">Month</th>
-                <th className="px-5 py-4 font-semibold">Target Sales</th>
-                <th className="px-5 py-4 font-semibold">Reached Sales</th>
-                <th className="px-5 py-4 font-semibold">Achievement %</th>
-                <th className="px-5 py-4 font-semibold">Employee of Month</th>
-                <th className="px-5 py-4 font-semibold">Edit</th>
-                <th className="px-5 py-4 font-semibold">Delete</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {visibleRows.length ? (
-                visibleRows.map((record) => {
-                  const achievement = calculateAchievement(record.targetSales, record.reachedSales);
-                  const employeeOfMonth = mockEmployees.find((employee) => employee.id === record.employeeOfMonthId);
+        <div className="mt-5 space-y-3">
+          {recordsError ? (
+            <div className="rounded-[24px] border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-700">
+              {recordsError}
+            </div>
+          ) : null}
 
-                  return (
-                    <tr key={record.id} className="text-slate-700">
-                      <td className="px-5 py-4 font-semibold text-slate-950">{formatMonth(record.month, record.year)}</td>
-                      <td className="px-5 py-4">{formatNumber(record.targetSales)}</td>
-                      <td className="px-5 py-4">{formatNumber(record.reachedSales)}</td>
-                      <td className="px-5 py-4">
-                        <span className="rounded-full bg-[#f6e8ff] px-3 py-1 text-xs font-semibold text-[#c446ff]">
-                          {formatNumber(achievement)}%
-                        </span>
-                      </td>
-                      <td className="px-5 py-4">{employeeOfMonth ? getEmployeeName(employeeOfMonth) : "--"}</td>
-                      <td className="px-5 py-4">
-                        <button
-                          type="button"
-                          onClick={() => handleEdit(record)}
-                          className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
-                        >
-                          Edit
-                        </button>
-                      </td>
-                      <td className="px-5 py-4">
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(record.id)}
-                          className="rounded-full border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td className="px-5 py-8 text-center text-slate-500" colSpan={7}>
-                    No historical shop records found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+          {recordsLoading ? (
+            <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-5 py-8 text-center text-sm text-slate-500">
+              Loading shop history...
+            </div>
+          ) : null}
+
+          {!recordsLoading && visibleRows.length ? (
+            visibleRows.map((record) => {
+              const achievement = calculateAchievement(record.targetSales, record.reachedSales);
+              const recordEmployees = getRecordEmployees(record, employees);
+
+              return (
+                <article key={record.id} className="rounded-[28px] border border-slate-200 bg-slate-50 p-5 shadow-sm">
+                  <h4 className="truncate text-xl font-bold text-slate-950">🏪 {getShopName(shops, record.shopId)}</h4>
+                  <div className="mt-4">
+                    <p className="mb-2 text-xs font-semibold text-slate-500">👤 Employee Avatars</p>
+                    <AvatarGroup employees={recordEmployees} isDark={false} size="sm" />
+                  </div>
+                  <div className="mt-4">
+                    <p className="text-xs font-semibold text-slate-500">📅 Month</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-800">{formatMonth(record.month, record.year)}</p>
+                  </div>
+                  <div className="mt-4">
+                    <p className="text-xs font-semibold text-slate-500">Progress</p>
+                    <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-200">
+                      <div
+                        className={`h-full rounded-full bg-gradient-to-r ${getProgressColor(achievement)}`}
+                        style={{ width: getProgressWidth(achievement) }}
+                      />
+                    </div>
+                    <p className="mt-3 text-center text-3xl font-black leading-none text-slate-950">{formatNumber(achievement)}%</p>
+                  </div>
+                  <div className="mt-4 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleEdit(record)}
+                      className="h-10 flex-1 rounded-2xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(record.id)}
+                      className="h-10 flex-1 rounded-2xl border border-rose-200 bg-white px-3 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </article>
+              );
+            })
+          ) : null}
+
+          {!recordsLoading && !visibleRows.length ? (
+            <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-5 py-8 text-center text-sm text-slate-500">
+              No historical shop records found.
+            </div>
+          ) : null}
         </div>
       </div>
     </section>

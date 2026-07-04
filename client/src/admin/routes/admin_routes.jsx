@@ -3,8 +3,10 @@ import AdminDashboardContent from "../components/admin_dashboard_content";
 import AdminRouteGate from "../components/admin_route_gate";
 import AdminPlaceholderPage from "../pages/admin_placeholder_page";
 import AdminUsersPage from "../pages/admin_users_page";
+import AnonymousMailboxAdminPage from "../pages/anonymous_mailbox_admin_page";
 import AnnouncementsPage from "../pages/announcements_page";
 import LeaderboardSettingsPage from "../pages/leaderboard_settings_page";
+import NotificationsAdminPage from "../pages/notifications_admin_page";
 import SalesTargetsPage from "../pages/sales_targets_page";
 import ShopHistoryPage from "../pages/shop_history_page";
 
@@ -75,6 +77,20 @@ export const adminRoutes = [
     allowedRoles: ["admin", "accountant"],
   },
   {
+    path: "notifications",
+    label: "Notifications",
+    title: "Notifications",
+    icon: "notifications",
+    allowedRoles: ["admin"],
+  },
+  {
+    path: "anonymous-mailbox",
+    label: "Mailbox",
+    title: "Anonymous Mailbox",
+    icon: "mailbox",
+    allowedRoles: ["admin", "accountant"],
+  },
+  {
     path: "posts",
     label: "Posts",
     title: "Posts",
@@ -141,6 +157,14 @@ export function createAdminRouteElement(route) {
 
   if (route.path === "announcements") {
     page = <AnnouncementsPage />;
+  }
+
+  if (route.path === "notifications") {
+    page = <NotificationsAdminPage />;
+  }
+
+  if (route.path === "anonymous-mailbox") {
+    page = <AnonymousMailboxAdminPage />;
   }
 
   return <AdminRouteGate route={route}>{page}</AdminRouteGate>;

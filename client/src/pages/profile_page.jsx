@@ -103,7 +103,7 @@ function formatAchievementValue(value) {
 
 function ProfilePage() {
   const { userId: routeUserId } = useParams();
-  const { user, refreshUserProfile } = useAuth();
+  const { user, refreshUserProfile, signOut } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const avatarInputRef = useRef(null);
   const albumInputRef = useRef(null);
@@ -123,6 +123,7 @@ function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [albumUploading, setAlbumUploading] = useState(false);
+  const [albumReplaceTarget, setAlbumReplaceTarget] = useState(null);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [activeProfileView, setActiveProfileView] = useState("personal");
@@ -384,11 +385,12 @@ function ProfilePage() {
     }
   };
 
-  const handleOpenAlbumPicker = () => {
-    if (!isOwnProfile || albumUploading || albumImages.length >= 6) {
+  const handleOpenAlbumPicker = (replaceTarget = null) => {
+    if (!isOwnProfile || albumUploading || (!replaceTarget && albumImages.length >= 6)) {
       return;
     }
 
+    setAlbumReplaceTarget(replaceTarget);
     albumInputRef.current?.click();
   };
 
@@ -400,7 +402,9 @@ function ProfilePage() {
       return;
     }
 
-    if (albumImages.length >= 6) {
+    const replacingAlbumImage = albumReplaceTarget?.albumImage || null;
+
+    if (!replacingAlbumImage && albumImages.length >= 6) {
       setError("Maximum 6 profile photos allowed.");
       input.value = "";
       return;
@@ -411,6 +415,30 @@ function ProfilePage() {
     setSuccess(null);
 
     try {
+      if (replacingAlbumImage) {
+        const previousAlbumImages = albumImages;
+        let albumImage = null;
+
+        if (albumImages.length >= 6) {
+          await deleteProfileAlbumImage(replacingAlbumImage);
+          albumImage = await uploadProfileAlbumImage(user.id, file);
+        } else {
+          albumImage = await uploadProfileAlbumImage(user.id, file);
+          await deleteProfileAlbumImage(replacingAlbumImage);
+        }
+
+        if (albumImage) {
+          setAlbumImages(
+            previousAlbumImages
+              .map((item) => (item.id === replacingAlbumImage.id ? albumImage : item))
+              .slice(0, 6)
+          );
+        }
+
+        setSuccess("Photo updated in Profile Gallery.");
+        return;
+      }
+
       const albumImage = await uploadProfileAlbumImage(user.id, file);
 
       if (albumImage) {
@@ -423,6 +451,7 @@ function ProfilePage() {
       setError(err?.message === "Maximum 6 profile photos allowed." ? err.message : "Unable to add photo. Please try again.");
     } finally {
       input.value = "";
+      setAlbumReplaceTarget(null);
       setAlbumUploading(false);
     }
   };
@@ -561,6 +590,7 @@ function ProfilePage() {
             initials={initials}
             isDark={isDark}
             isOwnProfile={isOwnProfile}
+            editing={editing}
             onToggleView={() => {
               setActiveProfileView((currentView) => {
                 const nextView = currentView === "personal" ? "work" : "personal";
@@ -573,6 +603,7 @@ function ProfilePage() {
                 return nextView;
               });
             }}
+            onToggleEdit={() => setEditing((current) => !current)}
             profile={profile}
             relationshipStatus={relationshipStatus}
             stats={stats}
@@ -606,7 +637,6 @@ function ProfilePage() {
               handleOpenAlbumPicker={handleOpenAlbumPicker}
               handlePreviousViewerImage={handlePreviousViewerImage}
               handleSave={handleSave}
-              onToggleEdit={() => setEditing((current) => !current)}
               isDark={isDark}
               isOwnProfile={isOwnProfile}
               musicUrl={musicUrl}
@@ -619,6 +649,8 @@ function ProfilePage() {
               zodiacSign={zodiacSign}
             />
           ) : null}
+
+          <ProfileSignOutButton isDark={isDark} onSignOut={signOut} />
         </>
       ) : null}
     </div>
@@ -632,6 +664,24 @@ function getInitials(name) {
     .slice(0, 2) || [];
 
   return parts.map((part) => part.charAt(0).toUpperCase()).join("") || "U";
+}
+
+function isPostVideoUrl(url) {
+  if (!url) {
+    return false;
+  }
+
+  try {
+    const pathname = new URL(url).pathname.toLowerCase();
+    return /\.(mp4|mov|webm)$/.test(pathname);
+  } catch {
+    return /\.(mp4|mov|webm)(\?|#|$)/i.test(url);
+  }
+}
+
+function getRelationshipBadgeLabel(value) {
+  const status = value?.toString().trim();
+  return status || "";
 }
 
 function formatBirthday(value) {
@@ -761,6 +811,8 @@ function ProfileHeader({
   initials,
   isDark,
   isOwnProfile,
+  editing,
+  onToggleEdit,
   onToggleView,
   profile,
   relationshipStatus,
@@ -768,6 +820,7 @@ function ProfileHeader({
 }) {
   const isPersonalView = activeView === "personal";
   const workTitle = profile.position || profile.job_title || profile.work_title || profile.title;
+  const relationshipBadge = getRelationshipBadgeLabel(relationshipStatus);
 
   return (
     <section
@@ -775,43 +828,45 @@ function ProfileHeader({
         isDark ? "border-slate-800 bg-slate-900 shadow-xl" : "border-slate-200 bg-white shadow-sm"
       }`}
     >
-      <div className="space-y-6">
-        <div className="flex min-w-0 flex-col items-center gap-5 text-center sm:flex-row sm:items-center sm:text-left">
-          <button
-            type="button"
-            onClick={handleOpenAvatarPicker}
-            disabled={!isOwnProfile || avatarUploading}
-            aria-label={isOwnProfile ? "Upload profile picture" : `${displayName} profile picture`}
-            className={`group relative h-28 w-28 shrink-0 overflow-hidden rounded-full border transition ${
-              isDark ? "border-slate-700 bg-slate-800" : "border-slate-200 bg-slate-100"
-            } ${isOwnProfile ? "cursor-pointer hover:opacity-95" : "cursor-default"} disabled:cursor-not-allowed`}
-          >
-            {profile.avatar_url ? (
-              <img src={profile.avatar_url} alt={displayName} className="h-full w-full object-cover" />
-            ) : (
-              <span className="flex h-full w-full items-center justify-center text-3xl font-semibold text-slate-500">
-                {initials}
-              </span>
-            )}
+      <div className="space-y-5">
+        <div className="grid min-w-0 gap-5 lg:grid-cols-[auto_minmax(0,1fr)_minmax(220px,280px)] lg:items-center">
+          <div className="flex justify-center lg:justify-start">
+            <button
+              type="button"
+              onClick={handleOpenAvatarPicker}
+              disabled={!isOwnProfile || avatarUploading}
+              aria-label={isOwnProfile ? "Upload profile picture" : `${displayName} profile picture`}
+              className={`group relative h-28 w-28 shrink-0 overflow-hidden rounded-full border transition sm:h-32 sm:w-32 ${
+                isDark ? "border-slate-700 bg-slate-800" : "border-slate-200 bg-slate-100"
+              } ${isOwnProfile ? "cursor-pointer hover:opacity-95" : "cursor-default"} disabled:cursor-not-allowed`}
+            >
+              {profile.avatar_url ? (
+                <img src={profile.avatar_url} alt={displayName} className="h-full w-full object-cover" />
+              ) : (
+                <span className="flex h-full w-full items-center justify-center text-3xl font-semibold text-slate-500">
+                  {initials}
+                </span>
+              )}
 
-            {isOwnProfile ? (
-              <span className="absolute inset-0 flex items-center justify-center bg-black/55 px-3 text-center text-xs font-semibold text-white opacity-0 transition group-hover:opacity-100 group-disabled:opacity-100">
-                {avatarUploading ? "Uploading..." : "Change photo"}
-              </span>
-            ) : null}
-          </button>
+              {isOwnProfile ? (
+                <span className="absolute inset-0 flex items-center justify-center bg-black/55 px-3 text-center text-xs font-semibold text-white opacity-0 transition group-hover:opacity-100 group-disabled:opacity-100">
+                  {avatarUploading ? "Uploading..." : "Change photo"}
+                </span>
+              ) : null}
+            </button>
+          </div>
 
-          <div className="min-w-0 max-w-full">
-            <h2 className={`break-words text-2xl font-semibold sm:truncate sm:text-3xl ${isDark ? "text-slate-100" : "text-slate-900"}`}>
+          <div className="min-w-0 text-center lg:text-left">
+            <h2 className={`min-w-0 break-words text-2xl font-semibold sm:text-3xl ${isDark ? "text-slate-100" : "text-slate-900"}`}>
               {displayName}
             </h2>
-            {isPersonalView && relationshipStatus ? (
+            {isPersonalView && relationshipBadge ? (
               <span
-                className={`mt-3 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                className={`mt-2 inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
                   isDark ? "bg-slate-800 text-sky-200" : "bg-[#f6e8ff] text-[#c446ff]"
                 }`}
               >
-                {relationshipStatus}
+                {relationshipBadge}
               </span>
             ) : null}
             {!isPersonalView && workTitle ? (
@@ -820,18 +875,31 @@ function ProfileHeader({
               </p>
             ) : null}
           </div>
+
+          {isPersonalView ? (
+            <div className="grid grid-cols-3 gap-2">
+              <ProfileHeaderStatCard label="Posts" value={stats.postsCount} isDark={isDark} />
+              <ProfileHeaderStatCard label="Stories" value={stats.storiesCount} isDark={isDark} />
+              <ProfileHeaderStatCard label="Views" value={stats.profileViewsCount} isDark={isDark} />
+            </div>
+          ) : null}
         </div>
 
-        {isPersonalView ? (
-          <div className="grid w-full grid-cols-3 gap-3 lg:max-w-[420px]">
-            <StatCard label="Posts" value={stats.postsCount} isDark={isDark} />
-            <StatCard label="Stories" value={stats.storiesCount} isDark={isDark} />
-            <StatCard label="Profile Views" value={stats.profileViewsCount} isDark={isDark} />
-          </div>
-        ) : null}
-
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <ProfileViewToggle activeView={activeView} isDark={isDark} onToggle={onToggleView} />
+          {isPersonalView && isOwnProfile ? (
+            <button
+              type="button"
+              onClick={onToggleEdit}
+              className={`inline-flex min-w-44 items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition ${
+                isDark
+                  ? "bg-sky-500 text-slate-950 hover:bg-sky-400"
+                  : "bg-[#c446ff] text-white hover:bg-[#ad32e3]"
+              }`}
+            >
+              {editing ? "View Profile" : "Edit Profile"}
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -848,17 +916,20 @@ function ProfileHeader({
   );
 }
 
-function StatCard({ label, value, isDark }) {
+function ProfileHeaderStatCard({ icon = null, label, value, isDark }) {
   const formattedValue = new Intl.NumberFormat().format(Number(value || 0));
 
   return (
     <div
-      className={`rounded-2xl border p-3 text-center sm:p-4 ${
+      className={`rounded-2xl border p-3 text-center ${
         isDark ? "border-slate-800 bg-slate-950 text-slate-100" : "border-slate-200 bg-slate-50 text-slate-900"
       }`}
     >
-      <p className="break-words text-2xl font-semibold leading-tight sm:text-3xl">{formattedValue}</p>
-      <p className="mt-2 text-xs font-medium text-slate-500 sm:text-sm">{label}</p>
+      <div className="flex items-center justify-center gap-1">
+        {icon ? <span className="text-sm" aria-hidden="true">{icon}</span> : null}
+        <p className="break-words text-lg font-semibold leading-tight sm:text-xl">{formattedValue}</p>
+      </div>
+      <p className="mt-1 text-[11px] font-medium text-slate-500 sm:text-xs">{label}</p>
     </div>
   );
 }
@@ -878,7 +949,6 @@ function PersonalProfile({
   handleOpenAlbumPicker,
   handlePreviousViewerImage,
   handleSave,
-  onToggleEdit,
   isDark,
   isOwnProfile,
   musicUrl,
@@ -890,6 +960,18 @@ function PersonalProfile({
   toggleTheme,
   zodiacSign,
 }) {
+  const gallerySlots = Array.from({ length: 6 }, (_, index) => {
+    const albumImage = albumImages[index] || null;
+    const isFirstEmptySlot = !albumImage && index === albumImages.length;
+
+    return {
+      albumImage,
+      isAddSlot: isOwnProfile && isFirstEmptySlot && albumImages.length < 6,
+      isPlaceholder: !albumImage && !(isOwnProfile && isFirstEmptySlot && albumImages.length < 6),
+      index,
+    };
+  });
+
   return (
     <div className="space-y-5 sm:space-y-6">
       {musicUrl ? (
@@ -926,19 +1008,16 @@ function PersonalProfile({
           <InfoLine icon={<GoDotFill />} text={profile.phone || "N/A"} />
           <InfoLine icon={<GoDotFill />} text={formatBirthday(profile.birthday)} />
           <InfoLine icon={<GoDotFill />} text={profile.hobby || "N/A"} />
-          {telegramUrl ? <TelegramLink href={telegramUrl} /> : null}
+          <TelegramIconLink href={telegramUrl} />
         </div>
       </section>
 
       <section
-        className={`profile-view-transition rounded-2xl border p-4 text-center sm:p-6 ${
+        className={`profile-view-transition rounded-2xl border p-4 sm:p-6 ${
           isDark ? "border-slate-800 bg-slate-900 shadow-xl" : "border-slate-200 bg-white shadow-sm"
         }`}
       >
-        {isOwnProfile ? (
-          <h3 className={`text-lg font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>Bio</h3>
-        ) : null}
-        <p className={`mx-auto mt-3 max-w-2xl whitespace-pre-wrap text-sm leading-6 ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+        <p className={`mt-3 whitespace-pre-wrap text-center text-sm leading-6 ${isDark ? "text-slate-200" : "text-slate-700"}`}>
           {profile.bio || "N/A"}
         </p>
       </section>
@@ -948,8 +1027,84 @@ function PersonalProfile({
           isDark ? "border-slate-800 bg-slate-900 shadow-xl" : "border-slate-200 bg-white shadow-sm"
         }`}
       >
-        <h3 className={`text-lg font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>Posts</h3>
-        <div className="mt-4 space-y-3">
+        <h3 className={`mb-4 text-lg font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>6 Photos</h3>
+        <div className="grid grid-cols-3 gap-2">
+          {gallerySlots.map((slot) => {
+            if (slot.albumImage) {
+              return (
+                <div key={slot.albumImage.id} className="group relative aspect-square overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setViewerIndex(slot.index)}
+                    className="h-full w-full"
+                  >
+                    <img src={slot.albumImage.image_url} alt={`Profile photo ${slot.index + 1}`} className="h-full w-full object-cover" />
+                  </button>
+
+                  {isOwnProfile ? (
+                    <div className="absolute inset-x-2 bottom-2 flex gap-1 opacity-100 sm:opacity-0 sm:transition sm:group-hover:opacity-100">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenAlbumPicker({ albumImage: slot.albumImage, index: slot.index })}
+                        disabled={albumUploading}
+                        className="flex-1 rounded-full bg-black/70 px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-70"
+                      >
+                        Replace
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteAlbumImage(slot.albumImage)}
+                        disabled={albumUploading}
+                        className="flex-1 rounded-full bg-black/70 px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-70"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            }
+
+            if (slot.isAddSlot) {
+              return (
+                <button
+                  key={`gallery-add-${slot.index}`}
+                  type="button"
+                  onClick={() => handleOpenAlbumPicker()}
+                  disabled={albumUploading}
+                  className={`aspect-square rounded-2xl border border-dashed text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 ${
+                    isDark
+                      ? "border-slate-700 bg-slate-950 text-slate-300 hover:bg-slate-800"
+                      : "border-slate-300 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  <span className="flex h-full flex-col items-center justify-center gap-2">
+                    <span className="text-2xl leading-none">+</span>
+                    <span>{albumUploading ? "Adding..." : "Add Photo"}</span>
+                  </span>
+                </button>
+              );
+            }
+
+            return (
+              <div
+                key={`gallery-placeholder-${slot.index}`}
+                className={`aspect-square rounded-2xl border ${
+                  isDark ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-slate-50"
+                }`}
+              />
+            );
+          })}
+        </div>
+      </section>
+
+      <section
+        className={`profile-view-transition rounded-2xl border p-4 sm:p-6 ${
+          isDark ? "border-slate-800 bg-slate-900 shadow-xl" : "border-slate-200 bg-white shadow-sm"
+        }`}
+      >
+        <h3 className={`mb-4 text-lg font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>Posts</h3>
+        <div className="space-y-3">
           {profilePosts.length ? (
             profilePosts.map((post) => (
               <article
@@ -960,7 +1115,11 @@ function PersonalProfile({
               >
                 <p className="whitespace-pre-wrap text-sm leading-6">{post.body}</p>
                 {post.image_url ? (
-                  <img src={post.image_url} alt="Profile post" className="mt-3 max-h-80 w-full rounded-2xl object-cover" />
+                  isPostVideoUrl(post.image_url) ? (
+                    <video src={post.image_url} controls playsInline preload="metadata" className="mt-3 max-h-80 w-full rounded-2xl bg-black object-contain" />
+                  ) : (
+                    <img src={post.image_url} alt="Profile post" className="mt-3 max-h-80 w-full rounded-2xl object-cover" />
+                  )
                 ) : null}
                 <p className={isDark ? "mt-3 text-xs text-slate-500" : "mt-3 text-xs text-slate-400"}>{post.date}</p>
               </article>
@@ -968,54 +1127,6 @@ function PersonalProfile({
           ) : (
             <p className={`text-sm ${isDark ? "text-slate-400" : "text-slate-500"}`}>No posts yet.</p>
           )}
-        </div>
-      </section>
-
-      <section
-        className={`profile-view-transition rounded-2xl border p-4 sm:p-6 ${
-          isDark ? "border-slate-800 bg-slate-900 shadow-xl" : "border-slate-200 bg-white shadow-sm"
-        }`}
-      >
-        <h3 className={`mb-4 text-lg font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>Photos & Albums</h3>
-        <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:grid-cols-3">
-          {albumImages.map((albumImage, index) => (
-            <div key={albumImage.id} className="relative aspect-square">
-              <button
-                type="button"
-                onClick={() => setViewerIndex(index)}
-                className="h-full w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-100"
-              >
-                <img src={albumImage.image_url} alt={`Profile album ${index + 1}`} className="h-full w-full object-cover" />
-              </button>
-
-              {isOwnProfile ? (
-                <button
-                  type="button"
-                  aria-label={`Delete profile album ${index + 1}`}
-                  onClick={() => handleDeleteAlbumImage(albumImage)}
-                  className="absolute right-2 top-2 rounded-full bg-black/70 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-black"
-                >
-                  Delete
-                </button>
-              ) : null}
-            </div>
-          ))}
-
-          {isOwnProfile && albumImages.length < 6 ? (
-            <button
-              type="button"
-              key="album-add-photo"
-              onClick={handleOpenAlbumPicker}
-              disabled={albumUploading}
-              className={`aspect-square rounded-2xl border border-dashed text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 ${
-                isDark
-                  ? "border-slate-700 bg-slate-950 text-slate-300 hover:bg-slate-800"
-                  : "border-slate-300 bg-slate-50 text-slate-600 hover:bg-slate-100"
-              }`}
-            >
-              {albumUploading ? "Adding..." : "+ Add Photo"}
-            </button>
-          ) : null}
         </div>
 
         <input
@@ -1026,22 +1137,6 @@ function PersonalProfile({
           onChange={handleAlbumFileChange}
         />
       </section>
-
-      {isOwnProfile ? (
-        <div className="profile-view-transition flex justify-center">
-          <button
-            type="button"
-            onClick={onToggleEdit}
-            className={`inline-flex min-w-44 items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition ${
-              isDark
-                ? "bg-sky-500 text-slate-950 hover:bg-sky-400"
-                : "bg-[#c446ff] text-white hover:bg-[#ad32e3]"
-            }`}
-          >
-            {editing ? "View Profile" : "Edit Profile"}
-          </button>
-        </div>
-      ) : null}
 
       {isOwnProfile ? (
         <div className="profile-view-transition flex justify-center">
@@ -1312,6 +1407,22 @@ function ProfileViewToggle({ activeView, isDark, onToggle }) {
   );
 }
 
+function ProfileSignOutButton({ isDark, onSignOut }) {
+  return (
+    <div className="profile-view-transition">
+      <button
+        type="button"
+        onClick={onSignOut}
+        className={`w-full rounded-2xl p-4 text-center text-sm font-semibold transition ${
+          isDark ? "bg-slate-950 text-slate-300 hover:text-white" : "bg-white text-slate-600 hover:text-slate-900"
+        }`}
+      >
+        Sign Out
+      </button>
+    </div>
+  );
+}
+
 function PerformanceMetricCard({ icon, label, value, isDark }) {
   return (
     <div
@@ -1356,26 +1467,40 @@ function getAchievementCardTone(tone, isDark) {
   return classes[tone] || classes.purple;
 }
 
-function TelegramLink({ href }) {
+function TelegramIconLink({ href }) {
   const { isDark } = useTheme();
-
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      aria-label="Open Telegram profile"
-      className={`flex items-center gap-2 rounded-2xl px-1 py-2 transition ${
-        isDark
-          ? "text-sky-200 hover:bg-slate-800/70"
-          : "text-[#229ed9] hover:bg-slate-100"
-      }`}
-    >
-      <span className="w-6 shrink-0 text-center text-base">
+  const className = `flex items-center gap-2 rounded-2xl px-1 py-2 transition ${
+    href
+      ? isDark
+        ? "text-sky-200 hover:bg-slate-800/70"
+        : "text-[#229ed9] hover:bg-slate-100"
+      : isDark
+        ? "cursor-not-allowed text-slate-600"
+        : "cursor-not-allowed text-slate-300"
+  }`;
+  const content = (
+    <>
+      <span className="w-6 shrink-0 text-center text-base" aria-hidden="true">
         <GoDotFill />
       </span>
-      <TelegramIcon />
-    </a>
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center" aria-hidden="true">
+        <TelegramIcon />
+      </span>
+    </>
+  );
+
+  if (href) {
+    return (
+      <a href={href} target="_blank" rel="noreferrer" aria-label="Open Telegram profile" className={className}>
+        {content}
+      </a>
+    );
+  }
+
+  return (
+    <div aria-label="Telegram profile unavailable" className={className}>
+      {content}
+    </div>
   );
 }
 

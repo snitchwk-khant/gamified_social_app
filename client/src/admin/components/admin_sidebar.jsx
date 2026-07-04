@@ -14,6 +14,10 @@ const iconPaths = {
     "M4 5h16v14H4V5Zm2 2v10h12V7H6Zm2 2h3v2H8V9Zm0 4h8v2H8v-2Zm5-4h3v2h-3V9Z",
   announcements:
     "M4 10v4h3l5 4V6l-5 4H4Zm10-3.2v10.4c2.33-.82 4-3.04 4-5.2s-1.67-4.38-4-5.2ZM20 12c0 3.31-2.03 6.15-4.91 7.34l-.78-1.84A6 6 0 0 0 18 12a6 6 0 0 0-3.69-5.5l.78-1.84A8 8 0 0 1 20 12Z",
+  notifications:
+    "M12 22a2.75 2.75 0 0 0 2.65-2h-5.3A2.75 2.75 0 0 0 12 22Zm7-6V11a7 7 0 1 0-14 0v5l-2 2v1h18v-1l-2-2Zm-2 .2.8.8H6.2l.8-.8V11a5 5 0 1 1 10 0v5.2Z",
+  mailbox:
+    "M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm0 3.2V17h16V8.2l-7.4 5.18a1 1 0 0 1-1.15 0L4 8.2Zm1.2-1.2L12 11.76 18.8 7H5.2Z",
   reports:
     "M5 3h10l4 4v14H5V3Zm9 1.5V8h3.5L14 4.5ZM8 12v2h8v-2H8Zm0 4v2h8v-2H8Zm0-8v2h4V8H8Z",
   settings:
@@ -29,7 +33,7 @@ function AdminIcon({ name }) {
 }
 
 function AdminSidebar({ isOpen, onClose }) {
-  const { signOut, user } = useAuth();
+  const { user } = useAuth();
   const location = useLocation();
   const role = user?.role?.toString().trim().toLowerCase() || "employee";
   const roleLabel = role === "accountant" ? "Accountant" : "Admin";
@@ -86,17 +90,6 @@ function AdminSidebar({ isOpen, onClose }) {
             );
           })}
         </nav>
-
-        <button
-          type="button"
-          onClick={signOut}
-          className="mt-auto flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 transition hover:border-[#c446ff] hover:bg-[#f6e8ff] hover:text-[#c446ff]"
-        >
-          <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
-            <path fill="currentColor" d="M5 3h8v2H7v14h6v2H5V3Zm11.6 5.4L20.2 12l-3.6 3.6-1.4-1.4 1.2-1.2H10v-2h6.4l-1.2-1.2 1.4-1.4Z" />
-          </svg>
-          <span>Sign Out</span>
-        </button>
       </aside>
     </>
   );

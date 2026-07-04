@@ -469,8 +469,9 @@ function HomePage() {
 
   const handlePublish = async (content, isAnonymous = false, imageFile = null) => {
     const trimmedContent = content?.trim();
-    if (!trimmedContent && !imageFile) {
-      return { success: false, error: "Write something or add an image to publish." };
+    const hasMedia = Array.isArray(imageFile) ? imageFile.length > 0 : Boolean(imageFile);
+    if (!trimmedContent && !hasMedia) {
+      return { success: false, error: "Write something or add media to publish." };
     }
 
     const { error } = await postService.createPost({

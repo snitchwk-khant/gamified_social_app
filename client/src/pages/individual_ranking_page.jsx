@@ -155,7 +155,58 @@ function IndividualRankingPage() {
             isDark ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-white"
           }`}
         >
-          <div className="overflow-x-auto">
+          <div className="space-y-3 p-3 sm:hidden">
+            {rankingRows.map((target) => (
+              <article
+                key={target.id}
+                className={`rounded-2xl border p-4 ${
+                  target.isCurrentUser
+                    ? isDark
+                      ? "border-sky-800 bg-sky-950/30 text-slate-100"
+                      : "border-[#f0c8ff] bg-[#fdf7ff] text-slate-700"
+                    : isDark
+                      ? "border-slate-800 bg-slate-900 text-slate-300"
+                      : "border-slate-100 bg-slate-50 text-slate-700"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="w-8 shrink-0 text-lg font-bold">#{target.rank}</span>
+                  <Link
+                    to={getProfilePath(target.employeeId, user?.id)}
+                    aria-label={`Open ${target.displayName} profile`}
+                    className="flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-[#f6e8ff] text-sm font-bold text-[#c446ff]"
+                  >
+                    {target.avatarUrl ? (
+                      <img src={target.avatarUrl} alt={target.displayName} className="h-full w-full object-cover" />
+                    ) : (
+                      getInitials(target.displayName, target.email)
+                    )}
+                  </Link>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <Link
+                        to={getProfilePath(target.employeeId, user?.id)}
+                        className={`truncate text-sm font-semibold ${isDark ? "text-slate-100" : "text-slate-950"}`}
+                      >
+                        {target.displayName}
+                      </Link>
+                      {target.isCurrentUser ? (
+                        <span className="shrink-0 rounded-full bg-[#c446ff] px-2 py-0.5 text-[11px] font-semibold text-white">You</span>
+                      ) : null}
+                    </div>
+                    <p className={`mt-1 text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                      {formatNumber(target.current_sales)} / {formatNumber(target.target_sales)}
+                    </p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${getAchievementClass(target.achievement, isDark)}`}>
+                    {formatNumber(target.achievement)}%
+                  </span>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="hidden overflow-x-auto sm:block">
             <table className="min-w-[720px] w-full text-left text-sm">
               <thead
                 className={`border-b text-xs uppercase tracking-[0.18em] ${

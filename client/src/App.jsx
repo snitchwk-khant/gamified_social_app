@@ -6,6 +6,7 @@ import { ThemeProvider, useTheme } from "./context/theme_context";
 import AdminLayout from "./admin/layouts/admin_layout";
 import { adminRoutes, createAdminRouteElement } from "./admin/routes/admin_routes";
 import MainLayout from "./layouts/main_layout";
+import AnonymousMailboxPage from "./pages/anonymous_mailbox_page";
 import HomePage from "./pages/home_page";
 import LoginPage from "./pages/login_page";
 import NotificationsPage from "./pages/notifications_page";
@@ -278,6 +279,7 @@ function App() {
               >
                 <Route index element={<HomePage />} />
                 <Route path="notifications" element={<NotificationsPage />} />
+                <Route path="anonymous-mailbox" element={<AnonymousMailboxPage />} />
                 <Route path="leaderboard" element={<LeaderboardPage />} />
                 <Route path="monthly-champions" element={<MonthlyChampionsPage />} />
                 <Route path="individual-ranking" element={<IndividualRankingPage />} />

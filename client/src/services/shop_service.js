@@ -46,6 +46,11 @@ const SHOP_HISTORY_EMPLOYEE_FIELDS = [
   "employee:profiles!shop_history_employees_employee_id_fkey(id,full_name,email,avatar_url,role)",
 ].join(",");
 
+let shopTargetsChannel = null;
+const shopTargetSubscribers = new Set();
+let shopAssignmentsChannel = null;
+const shopAssignmentSubscribers = new Set();
+
 function normalizeNumber(value) {
   return Math.max(0, Number(value) || 0);
 }
@@ -509,32 +514,54 @@ export async function getShopChampionHistory({ shopId = null } = {}) {
 }
 
 export function subscribeToShopTargets(onChange) {
-  const channel = supabase
-    .channel("shop-sales-targets-realtime")
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "shop_sales_targets" },
-      onChange
-    )
-    .subscribe();
+  shopTargetSubscribers.add(onChange);
+
+  if (!shopTargetsChannel) {
+    shopTargetsChannel = supabase
+      .channel("shop-sales-targets-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "shop_sales_targets" },
+        (payload) => {
+          shopTargetSubscribers.forEach((subscriber) => subscriber(payload));
+        }
+      )
+      .subscribe();
+  }
 
   return () => {
-    supabase.removeChannel(channel);
+    shopTargetSubscribers.delete(onChange);
+
+    if (!shopTargetSubscribers.size && shopTargetsChannel) {
+      supabase.removeChannel(shopTargetsChannel);
+      shopTargetsChannel = null;
+    }
   };
 }
 
 export function subscribeToShopAssignments(onChange) {
-  const channel = supabase
-    .channel("profile-shop-assignments-realtime")
-    .on(
-      "postgres_changes",
-      { event: "UPDATE", schema: "public", table: "profiles" },
-      onChange
-    )
-    .subscribe();
+  shopAssignmentSubscribers.add(onChange);
+
+  if (!shopAssignmentsChannel) {
+    shopAssignmentsChannel = supabase
+      .channel("profile-shop-assignments-realtime")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles" },
+        (payload) => {
+          shopAssignmentSubscribers.forEach((subscriber) => subscriber(payload));
+        }
+      )
+      .subscribe();
+  }
 
   return () => {
-    supabase.removeChannel(channel);
+    shopAssignmentSubscribers.delete(onChange);
+
+    if (!shopAssignmentSubscribers.size && shopAssignmentsChannel) {
+      supabase.removeChannel(shopAssignmentsChannel);
+      shopAssignmentsChannel = null;
+    }
   };
 }
 

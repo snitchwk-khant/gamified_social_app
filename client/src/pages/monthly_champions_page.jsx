@@ -88,7 +88,56 @@ function MonthlyChampionsPage() {
             isDark ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-white"
           }`}
         >
-          <div className="overflow-x-auto">
+          <div className="space-y-3 p-3 sm:hidden">
+            {champions.map((champion) => {
+              const profile = champion.profile || {};
+              const displayName = profile.full_name || profile.email || "Monthly Champion";
+
+              return (
+                <article
+                  key={champion.id}
+                  className={`rounded-2xl border p-4 ${
+                    isDark ? "border-slate-800 bg-slate-900 text-slate-300" : "border-slate-100 bg-slate-50 text-slate-700"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Link
+                      to={getProfilePath(champion.user_id, user?.id)}
+                      aria-label={`Open ${displayName} profile`}
+                      className="flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-[#f6e8ff] text-sm font-bold text-[#c446ff] ring-2 ring-[#FFD700]"
+                    >
+                      {profile.avatar_url ? (
+                        <img src={profile.avatar_url} alt={displayName} className="h-full w-full object-cover" />
+                      ) : (
+                        getInitials(profile.full_name, profile.email)
+                      )}
+                    </Link>
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        to={getProfilePath(champion.user_id, user?.id)}
+                        className={`block truncate text-sm font-semibold ${isDark ? "text-slate-100" : "text-slate-950"}`}
+                      >
+                        {displayName}
+                      </Link>
+                      <p className={`mt-1 truncate text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                        {profile.department || "No department"}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className={`text-sm font-bold ${isDark ? "text-slate-100" : "text-slate-950"}`}>
+                        {numberFormatter.format(champion.total_points)}
+                      </p>
+                      <p className={`mt-1 text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                        {formatChampionMonth(champion.month)}
+                      </p>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
+          <div className="hidden overflow-x-auto sm:block">
             <table className="min-w-[720px] w-full text-left text-sm">
               <thead
                 className={`border-b text-xs uppercase tracking-[0.18em] ${

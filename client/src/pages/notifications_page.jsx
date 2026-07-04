@@ -1,24 +1,34 @@
-import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { useAuth } from "../context/auth_context";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTheme } from "../context/theme_context";
-import ChatWidget from "../components/chat/chat_widget";
 import {
   getMyNotificationsResult,
+  markAllNotificationsRead,
   markNotificationRead,
+  subscribeToMyNotifications,
+  subscribeToUnreadNotificationCount,
 } from "../services/notifications_service";
-import { getProfilePath } from "../utils/profile_path";
 
-function getInitials(name, email) {
-  const source = name || email || "User";
-  return (
-    source
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0]?.toUpperCase())
-      .join("") || "U"
-  );
+const FILTERS = [
+  { id: "all", label: "All" },
+  { id: "unread", label: "Unread" },
+  { id: "Achievement", label: "Achievements" },
+  { id: "Announcement", label: "Announcements" },
+  { id: "Reward", label: "Rewards" },
+];
+
+const CATEGORY_STYLES = {
+  Announcement: { icon: "📢", label: "Announcement" },
+  Achievement: { icon: "🏆", label: "Achievement" },
+  Reward: { icon: "🎁", label: "Reward" },
+  System: { icon: "⚙️", label: "System" },
+  Warning: { icon: "⚠️", label: "Warning" },
+  Sales: { icon: "📈", label: "Sales" },
+  Leaderboard: { icon: "🏅", label: "Leaderboard" },
+};
+
+function getCategoryInfo(category) {
+  return CATEGORY_STYLES[category] || { icon: "🔔", label: category || "System" };
 }
 
 function formatNotificationTime(value) {
@@ -26,19 +36,39 @@ function formatNotificationTime(value) {
     return "Unknown";
   }
 
-  return new Date(value).toLocaleString();
+  const date = new Date(value);
+  const diffMs = Date.now() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / 60000);
+
+  if (diffMinutes < 1) return "Just now";
+  if (diffMinutes < 60) return `${diffMinutes} min ago`;
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays} days ago`;
+
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function NotificationsPage() {
-  const { user } = useAuth();
   const { isDark } = useTheme();
-  const [isMobileChatView, setIsMobileChatView] = useState(() =>
-    typeof window !== "undefined" ? window.matchMedia("(max-width: 767px)").matches : false
-  );
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
+  const [selectedNotification, setSelectedNotification] = useState(null);
+  const [activeFilter, setActiveFilter] = useState("all");
+  const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [markingById, setMarkingById] = useState({});
+  const [markingAll, setMarkingAll] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const loadNotifications = useCallback(async () => {
     setLoading(true);
@@ -58,24 +88,40 @@ function NotificationsPage() {
   }, []);
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia("(max-width: 767px)");
-    const updateMobileView = () => {
-      setIsMobileChatView(mediaQuery.matches);
-    };
-
-    updateMobileView();
-    mediaQuery.addEventListener("change", updateMobileView);
-
-    return () => {
-      mediaQuery.removeEventListener("change", updateMobileView);
-    };
-  }, []);
+    loadNotifications();
+  }, [loadNotifications]);
 
   useEffect(() => {
-    if (!isMobileChatView) {
-      loadNotifications();
-    }
-  }, [isMobileChatView, loadNotifications]);
+    return subscribeToMyNotifications(loadNotifications);
+  }, [loadNotifications]);
+
+  useEffect(() => {
+    return subscribeToUnreadNotificationCount(setUnreadCount);
+  }, []);
+
+  const filteredNotifications = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
+    return notifications.filter((item) => {
+      const category = item.category || item.type || "System";
+
+      if (activeFilter === "unread" && item.is_read) {
+        return false;
+      }
+
+      if (!["all", "unread"].includes(activeFilter) && category !== activeFilter) {
+        return false;
+      }
+
+      if (!normalizedSearch) {
+        return true;
+      }
+
+      return [item.title, item.message || item.body, category].some((value) =>
+        value?.toString().toLowerCase().includes(normalizedSearch)
+      );
+    });
+  }, [activeFilter, notifications, searchTerm]);
 
   const handleMarkRead = async (id) => {
     if (!id) {
@@ -93,6 +139,9 @@ function NotificationsPage() {
       setNotifications((current) =>
         current.map((item) => (item.id === id ? { ...item, is_read: true, ...data } : item))
       );
+      setSelectedNotification((current) =>
+        current?.id === id ? { ...current, is_read: true, ...data } : current
+      );
     }
 
     setMarkingById((current) => ({
@@ -101,32 +150,115 @@ function NotificationsPage() {
     }));
   };
 
-  if (isMobileChatView) {
-    return (
-      <div className={`fixed inset-0 z-[70] h-[100dvh] ${isDark ? "bg-slate-950" : "bg-[#f0f2f5]"}`}>
-        <ChatWidget fullScreen />
-      </div>
-    );
-  }
+  const handleMarkAllRead = async () => {
+    if (!unreadCount || markingAll) {
+      return;
+    }
+
+    setMarkingAll(true);
+    setError("");
+
+    const { error: markError } = await markAllNotificationsRead();
+
+    if (!markError) {
+      setNotifications((current) => current.map((item) => ({ ...item, is_read: true })));
+      setSelectedNotification((current) => (current ? { ...current, is_read: true } : current));
+    } else {
+      setError("Unable to mark notifications as read right now. Please try again.");
+    }
+
+    setMarkingAll(false);
+  };
+
+  const openNotification = (item) => {
+    setSelectedNotification(item);
+
+    if (!item.is_read) {
+      handleMarkRead(item.id);
+    }
+  };
+
+  const handleAction = (item) => {
+    const actionUrl = item?.metadata?.action_url;
+
+    if (actionUrl) {
+      navigate(actionUrl);
+    }
+  };
 
   return (
-    <div className="min-w-0 space-y-5 sm:space-y-6">
+    <section className="space-y-5 pb-24 sm:space-y-6 sm:pb-0">
       <div
-        className={`rounded-2xl border p-4 sm:p-6 ${
-          isDark ? "border-slate-800 bg-slate-900 shadow-xl" : "border-slate-200 bg-white shadow-sm"
+        className={`rounded-3xl border p-5 shadow-sm ${
+          isDark ? "border-slate-800 bg-slate-950 text-slate-100" : "border-slate-200 bg-white text-slate-900"
         }`}
       >
-        <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-slate-500 sm:text-sm sm:tracking-[0.28em]">Notifications</p>
-          <h2 className={`mt-2 text-xl font-semibold sm:text-2xl ${isDark ? "text-slate-100" : "text-slate-900"}`}>
-            What’s happening today
-          </h2>
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#c446ff]">Notifications</p>
+        <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="text-2xl font-bold">Notification Center</h1>
+          <button
+            type="button"
+            onClick={handleMarkAllRead}
+            disabled={!unreadCount || markingAll}
+            className={`h-10 rounded-2xl border px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+              isDark
+                ? "border-[#c446ff]/60 bg-slate-950 text-[#e4b3ff] hover:bg-[#c446ff]/10"
+                : "border-[#c446ff]/40 bg-white text-[#9d2bd5] hover:bg-[#f8e9ff]"
+            }`}
+          >
+            {markingAll ? "Marking..." : "Mark All as Read"}
+          </button>
+        </div>
+        <p className={isDark ? "mt-2 text-sm text-slate-400" : "mt-2 text-sm text-slate-500"}>
+          Updates from Gemify, achievements, rewards, and system messages.
+        </p>
+      </div>
+
+      <div
+        className={`rounded-3xl border p-4 shadow-sm sm:p-5 ${
+          isDark ? "border-slate-800 bg-slate-950 text-slate-100" : "border-slate-200 bg-white text-slate-900"
+        }`}
+      >
+        <div className="flex flex-col gap-3">
+          <input
+            type="search"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Search title, message, category"
+            className={`h-12 w-full rounded-2xl border px-4 text-sm outline-none transition placeholder:text-slate-400 ${
+              isDark
+                ? "border-slate-800 bg-slate-900 text-slate-100 focus:border-sky-500"
+                : "border-slate-200 bg-slate-50 text-slate-900 focus:border-[#c446ff] focus:bg-white"
+            }`}
+          />
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {FILTERS.map((filter) => {
+              const isActive = activeFilter === filter.id;
+
+              return (
+                <button
+                  key={filter.id}
+                  type="button"
+                  onClick={() => setActiveFilter(filter.id)}
+                  className={`h-10 shrink-0 rounded-2xl px-4 text-sm font-semibold transition ${
+                    isActive
+                      ? "bg-[#c446ff] text-white"
+                      : isDark
+                        ? "bg-slate-900 text-slate-300 hover:bg-slate-800"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
       {loading ? (
         <div
-          className={`rounded-2xl border p-4 text-sm sm:p-6 ${
+          className={`rounded-3xl border p-5 text-sm ${
             isDark ? "border-slate-800 bg-slate-950 text-slate-300" : "border-slate-200 bg-white text-slate-600"
           }`}
         >
@@ -136,7 +268,7 @@ function NotificationsPage() {
 
       {!loading && error ? (
         <div
-          className={`rounded-2xl border p-4 sm:p-6 ${
+          className={`rounded-3xl border p-5 ${
             isDark ? "border-rose-900 bg-rose-950/30 text-rose-200" : "border-rose-200 bg-rose-50 text-rose-700"
           }`}
         >
@@ -144,7 +276,7 @@ function NotificationsPage() {
           <button
             type="button"
             onClick={loadNotifications}
-            className={`mt-4 rounded-full border px-4 py-2 text-sm font-medium transition ${
+            className={`mt-4 h-10 rounded-2xl border px-4 text-sm font-semibold transition ${
               isDark
                 ? "border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
                 : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
@@ -155,109 +287,133 @@ function NotificationsPage() {
         </div>
       ) : null}
 
-      {!loading && !error && notifications.length === 0 ? (
+      {!loading && !error && !filteredNotifications.length ? (
         <div
-          className={`rounded-2xl border p-4 text-sm sm:p-6 ${
+          className={`rounded-3xl border p-8 text-center ${
             isDark ? "border-slate-800 bg-slate-950 text-slate-300" : "border-slate-200 bg-white text-slate-600"
           }`}
         >
-          No notifications yet.
+          <div className="text-4xl">🔔</div>
+          <h2 className={`mt-3 text-lg font-bold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
+            No notifications yet.
+          </h2>
         </div>
       ) : null}
 
-      {!loading && !error && notifications.length > 0 ? (
-        <div className="space-y-4">
-          {notifications.map((item) => {
-            const actor = item.actor || null;
-            const actorName = actor?.full_name || actor?.email || "";
+      {!loading && !error && filteredNotifications.length ? (
+        <div className="space-y-3">
+          {filteredNotifications.map((item) => {
+            const category = item.category || item.type || "System";
+            const categoryInfo = getCategoryInfo(category);
 
             return (
-          <div
-            key={item.id}
-            className={`rounded-2xl border p-4 shadow-sm sm:p-5 ${
-              isDark
-                ? "border-slate-800 bg-slate-950 text-slate-200 shadow-slate-950/20"
-                : "border-slate-200 bg-white text-slate-700"
-            }`}
-          >
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-              <div className="flex min-w-0 items-start gap-3">
-                {actor?.id ? (
-                  <Link
-                    to={getProfilePath(actor.id, user?.id)}
-                    aria-label={`Open ${actorName || "user"} profile`}
-                    className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-[#f6e8ff] text-sm font-bold text-[#c446ff]"
-                  >
-                    {actor.avatar_url ? (
-                      <img src={actor.avatar_url} alt={actorName} className="h-full w-full object-cover" />
-                    ) : (
-                      getInitials(actor.full_name, actor.email)
-                    )}
-                  </Link>
-                ) : null}
-                <div className="min-w-0">
-                  <h3 className={`text-lg font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>
-                    {item.title || "Notification"}
-                  </h3>
-                  {actor?.id ? (
-                    <Link
-                      to={getProfilePath(actor.id, user?.id)}
-                      className={`mt-1 block cursor-pointer truncate text-sm font-semibold transition ${
-                        isDark ? "text-slate-300 hover:text-sky-300" : "text-slate-700 hover:text-[#c446ff]"
-                      }`}
-                    >
-                      {actorName}
-                    </Link>
-                  ) : null}
-                <p className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-500">
-                  {(item.type || "general").toString().replaceAll("_", " ")}
-                </p>
-                </div>
-              </div>
-              <span className="break-words text-xs uppercase tracking-[0.18em] text-slate-500 sm:tracking-[0.24em]">
-                {formatNotificationTime(item.created_at)}
-              </span>
-            </div>
-            <p className={`mt-3 text-sm leading-6 ${isDark ? "text-slate-400" : "text-slate-600"}`}>
-              {item.body || "No details provided."}
-            </p>
-
-            <div className="mt-4 flex flex-col gap-3 min-[360px]:flex-row min-[360px]:items-center min-[360px]:justify-between">
-              <span
-                className={`rounded-full border px-3 py-1 text-xs uppercase tracking-[0.2em] ${
-                  item.is_read
-                    ? isDark
-                      ? "border-slate-700 bg-slate-900 text-slate-300"
-                      : "border-slate-200 bg-slate-100 text-slate-600"
-                    : isDark
-                      ? "border-sky-900 bg-sky-950/40 text-sky-200"
-                      : "border-sky-200 bg-sky-50 text-sky-700"
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => openNotification(item)}
+                className={`w-full rounded-3xl border p-4 text-left shadow-sm transition hover:-translate-y-0.5 sm:p-5 ${
+                  isDark
+                    ? "border-slate-800 bg-slate-950 text-slate-200 shadow-slate-950/20 hover:border-[#c446ff]/50"
+                    : "border-slate-200 bg-white text-slate-700 hover:border-[#c446ff]/40"
                 }`}
               >
-                {item.is_read ? "Read" : "Unread"}
-              </span>
+                <div className="flex items-start gap-3">
+                  <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-xl ${isDark ? "bg-slate-900" : "bg-[#f6e8ff]"}`}>
+                    {categoryInfo.icon}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className={`truncate text-base font-bold ${isDark ? "text-slate-100" : "text-slate-950"}`}>
+                          {item.title || "Notification"}
+                        </h3>
+                        <p className={`mt-1 line-clamp-2 text-sm leading-6 ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                          {item.message || item.body || "No details provided."}
+                        </p>
+                      </div>
+                      {!item.is_read ? <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[#c446ff]" /> : null}
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isDark ? "bg-slate-900 text-slate-300" : "bg-slate-100 text-slate-600"}`}>
+                        {categoryInfo.label}
+                      </span>
+                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${item.is_read ? "text-slate-500" : "bg-[#c446ff]/15 text-[#c446ff]"}`}>
+                        {item.is_read ? "Read" : "● Unread"}
+                      </span>
+                      <span className="ml-auto text-xs font-semibold text-slate-500">
+                        {formatNotificationTime(item.created_at)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
 
-              {!item.is_read ? (
+      {selectedNotification ? (
+        <div className="fixed inset-0 z-[80] flex items-end bg-slate-950/70 px-3 py-4 sm:items-center sm:justify-center">
+          <div
+            className={`w-full rounded-3xl border p-5 shadow-2xl sm:max-w-lg ${
+              isDark ? "border-slate-800 bg-slate-950 text-slate-100" : "border-slate-200 bg-white text-slate-900"
+            }`}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#c446ff]">
+                  {getCategoryInfo(selectedNotification.category).label}
+                </p>
+                <h2 className="mt-2 text-xl font-bold">{selectedNotification.title}</h2>
+                <p className="mt-1 text-xs font-semibold text-slate-500">
+                  {formatNotificationTime(selectedNotification.created_at)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedNotification(null)}
+                className={`h-10 w-10 rounded-full text-lg transition ${
+                  isDark ? "bg-slate-900 text-slate-300 hover:bg-slate-800" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+                aria-label="Close notification detail"
+              >
+                ×
+              </button>
+            </div>
+
+            <p className={`mt-5 whitespace-pre-wrap text-sm leading-7 ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+              {selectedNotification.message || selectedNotification.body || "No details provided."}
+            </p>
+
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              {selectedNotification.metadata?.action_url ? (
                 <button
                   type="button"
-                  onClick={() => handleMarkRead(item.id)}
-                  disabled={Boolean(markingById[item.id])}
-                  className={`rounded-full border px-4 py-2 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-70 ${
+                  onClick={() => handleAction(selectedNotification)}
+                  className="h-11 rounded-2xl bg-[#c446ff] px-5 text-sm font-semibold text-white transition hover:bg-[#ad32e3]"
+                >
+                  Open
+                </button>
+              ) : null}
+              {!selectedNotification.is_read ? (
+                <button
+                  type="button"
+                  onClick={() => handleMarkRead(selectedNotification.id)}
+                  disabled={Boolean(markingById[selectedNotification.id])}
+                  className={`h-11 rounded-2xl border px-5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 ${
                     isDark
                       ? "border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
                       : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
                   }`}
                 >
-                  {markingById[item.id] ? "Marking..." : "Mark as read"}
+                  {markingById[selectedNotification.id] ? "Marking..." : "Mark as Read"}
                 </button>
               ) : null}
             </div>
           </div>
-            );
-          })}
         </div>
       ) : null}
-    </div>
+    </section>
   );
 }
 

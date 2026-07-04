@@ -1,76 +1,69 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import ShopLeaderboardTable from "../components/shops/shop_leaderboard_table";
-import ShopTopCards from "../components/shops/shop_top_cards";
-import {
-  getShopAssignmentEmployees,
-  getShopSalesTargets,
-  subscribeToShopAssignments,
-  subscribeToShopTargets,
-} from "../services/shop_service";
-import { buildShopRankingCards, buildTopShopCards } from "../services/shop_ranking_service";
-import { getLeaderboardDisplayPeriod } from "../services/leaderboard_settings_service";
+import { Link } from "react-router-dom";
 import { useTheme } from "../context/theme_context";
+import { getShopAssignmentEmployees, getShops, subscribeToShopAssignments } from "../services/shop_service";
+import { getShopPath } from "../utils/shop_path";
 
-function getCurrentMonthValue() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-}
+function getShopEmployeeCounts(employees = []) {
+  return employees.reduce((counts, employee) => {
+    const shopId = employee.current_shop_id || employee.shop_id;
 
-function formatMonthValue(period) {
-  return `${period.year}-${String(period.month).padStart(2, "0")}`;
+    if (!shopId) {
+      return counts;
+    }
+
+    counts[shopId] = (counts[shopId] || 0) + 1;
+    return counts;
+  }, {});
 }
 
 function ShopsPage() {
   const { isDark } = useTheme();
-  const [monthValue, setMonthValue] = useState(getCurrentMonthValue);
+  const [shops, setShops] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [shopRows, setShopRows] = useState([]);
-  const [shopEmployees, setShopEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const loadShopLeaderboard = useCallback(async () => {
+  const loadShops = useCallback(async () => {
     setLoading(true);
     setError("");
 
     try {
-      const period = await getLeaderboardDisplayPeriod();
-      setMonthValue(formatMonthValue(period));
-      const [targets, employees] = await Promise.all([
-        getShopSalesTargets(period),
+      const [shopRows, employeeRows] = await Promise.all([
+        getShops(),
         getShopAssignmentEmployees(),
       ]);
-      setShopRows(targets);
-      setShopEmployees(employees);
+      setShops(shopRows);
+      setEmployees(employeeRows);
     } catch (err) {
-      console.error("Shop leaderboard load error:", err);
-      setError(err?.message || "Unable to load shop leaderboard.");
+      console.error("Shop list load error:", err);
+      setError(err?.message || "Unable to load shops.");
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadShopLeaderboard();
-  }, [loadShopLeaderboard]);
+    loadShops();
+  }, [loadShops]);
 
   useEffect(() => {
-    return subscribeToShopTargets(loadShopLeaderboard);
-  }, [loadShopLeaderboard]);
+    return subscribeToShopAssignments(loadShops);
+  }, [loadShops]);
 
-  useEffect(() => {
-    return subscribeToShopAssignments(loadShopLeaderboard);
-  }, [loadShopLeaderboard]);
+  const employeeCounts = useMemo(() => getShopEmployeeCounts(employees), [employees]);
+  const filteredShops = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
 
-  const shopLeaderboardRows = useMemo(() => {
-    return buildShopRankingCards(shopRows, shopEmployees, { searchTerm });
-  }, [searchTerm, shopEmployees, shopRows]);
+    if (!normalizedSearch) {
+      return shops;
+    }
 
-  const topShopRows = useMemo(() => buildTopShopCards(shopRows, shopEmployees), [shopEmployees, shopRows]);
-
-  const remainingShopRows = useMemo(() => {
-    return shopLeaderboardRows.filter((target) => target.rank > 3);
-  }, [shopLeaderboardRows]);
+    return shops.filter((shop) =>
+      [shop.name, shop.code].some((value) => value?.toString().toLowerCase().includes(normalizedSearch))
+    );
+  }, [searchTerm, shops]);
 
   return (
     <section className="space-y-5">
@@ -83,33 +76,20 @@ function ShopsPage() {
           <div>
             <h1 className="text-2xl font-semibold">Shops</h1>
             <p className={isDark ? "mt-1 text-sm text-slate-400" : "mt-1 text-sm text-slate-500"}>
-              Shop leaderboard and performance ranking
+              Browse shops and open details
             </p>
           </div>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <input
-              type="month"
-              value={monthValue}
-              onChange={(event) => setMonthValue(event.target.value)}
-              className={`h-11 min-w-0 rounded-2xl border px-4 text-sm outline-none transition sm:w-48 ${
-                isDark
-                  ? "border-slate-800 bg-slate-900 text-slate-100 focus:border-sky-500"
-                  : "border-slate-200 bg-slate-50 text-slate-900 focus:border-[#c446ff] focus:bg-white"
-              }`}
-              aria-label="Select month"
-            />
-            <input
-              type="search"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search shop"
-              className={`h-11 min-w-0 rounded-2xl border px-4 text-sm outline-none transition placeholder:text-slate-400 sm:w-64 ${
-                isDark
-                  ? "border-slate-800 bg-slate-900 text-slate-100 focus:border-sky-500"
-                  : "border-slate-200 bg-slate-50 text-slate-900 focus:border-[#c446ff] focus:bg-white"
-              }`}
-            />
-          </div>
+          <input
+            type="search"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Search shop"
+            className={`h-11 min-w-0 rounded-2xl border px-4 text-sm outline-none transition placeholder:text-slate-400 sm:w-64 ${
+              isDark
+                ? "border-slate-800 bg-slate-900 text-slate-100 focus:border-sky-500"
+                : "border-slate-200 bg-slate-50 text-slate-900 focus:border-[#c446ff] focus:bg-white"
+            }`}
+          />
         </div>
 
         {error ? (
@@ -129,23 +109,56 @@ function ShopsPage() {
             isDark ? "border-slate-800 bg-slate-950 text-slate-400" : "border-slate-200 bg-white text-slate-500"
           }`}
         >
-          Loading shop leaderboard...
+          Loading shops...
         </div>
       ) : null}
 
-      {!loading ? <ShopTopCards rows={topShopRows} isDark={isDark} /> : null}
-
-      {!loading && remainingShopRows.length ? (
-        <ShopLeaderboardTable rows={remainingShopRows} isDark={isDark} />
+      {!loading && filteredShops.length ? (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {filteredShops.map((shop) => (
+            <Link
+              key={shop.id}
+              to={getShopPath(shop.id)}
+              className={`rounded-2xl border p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-[#c446ff]/50 ${
+                isDark ? "border-slate-800 bg-slate-950 text-slate-100" : "border-slate-200 bg-white text-slate-900"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="truncate text-lg font-semibold">{shop.name}</h2>
+                  {shop.code ? (
+                    <p className={isDark ? "mt-1 text-sm text-slate-400" : "mt-1 text-sm text-slate-500"}>{shop.code}</p>
+                  ) : null}
+                </div>
+                <span
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                    shop.is_active
+                      ? isDark
+                        ? "bg-emerald-950 text-emerald-200"
+                        : "bg-emerald-50 text-emerald-700"
+                      : isDark
+                        ? "bg-slate-800 text-slate-300"
+                        : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {shop.is_active ? "Active" : "Inactive"}
+                </span>
+              </div>
+              <p className={isDark ? "mt-4 text-sm text-slate-400" : "mt-4 text-sm text-slate-500"}>
+                {employeeCounts[shop.id] || 0} employees
+              </p>
+            </Link>
+          ))}
+        </div>
       ) : null}
 
-      {!loading && !shopLeaderboardRows.length ? (
+      {!loading && !filteredShops.length ? (
         <div
           className={`rounded-2xl border px-5 py-8 text-center text-sm ${
             isDark ? "border-slate-800 bg-slate-950 text-slate-400" : "border-slate-200 bg-white text-slate-500"
           }`}
         >
-          No shop leaderboard data for this month.
+          No shops found.
         </div>
       ) : null}
     </section>

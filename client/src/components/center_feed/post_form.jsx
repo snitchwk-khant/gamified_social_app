@@ -3,13 +3,16 @@ import { useTheme } from "../../context/theme_context";
 import { useAuth } from "../../context/auth_context";
 
 const MAX_POST_IMAGE_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_POST_VIDEO_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 const POST_IMAGE_ALLOWED_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"]);
 const POST_IMAGE_ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const POST_VIDEO_ALLOWED_EXTENSIONS = new Set(["mp4", "mov", "webm"]);
+const POST_VIDEO_ALLOWED_TYPES = new Set(["video/mp4", "video/quicktime", "video/webm"]);
 
 function PostForm({ value, onChange, onSubmit }) {
   const [isAnonymous, setIsAnonymous] = useState(false);
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState("");
+  const [selectedImages, setSelectedImages] = useState([]);
+  const [previewUrls, setPreviewUrls] = useState([]);
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState("");
   const imageInputRef = useRef(null);
@@ -18,26 +21,27 @@ function PostForm({ value, onChange, onSubmit }) {
 
   const adminDisplayName = user?.full_name || user?.name || "Administrator";
   const adminInitial = (adminDisplayName?.charAt(0) || "A").toUpperCase();
+  const selectedFileIsVideo = selectedImages.length === 1 ? isPostVideoFile(selectedImages[0]) : false;
 
   useEffect(() => {
-    if (!selectedImage) {
-      setPreviewUrl("");
+    if (!selectedImages.length) {
+      setPreviewUrls([]);
       return undefined;
     }
 
-    const nextPreviewUrl = URL.createObjectURL(selectedImage);
-    setPreviewUrl(nextPreviewUrl);
+    const nextPreviewUrls = selectedImages.map((file) => URL.createObjectURL(file));
+    setPreviewUrls(nextPreviewUrls);
 
     return () => {
-      URL.revokeObjectURL(nextPreviewUrl);
+      nextPreviewUrls.forEach((url) => URL.revokeObjectURL(url));
     };
-  }, [selectedImage]);
+  }, [selectedImages]);
 
   const handleSubmit = async () => {
     const trimmedValue = value?.trim();
 
-    if (!trimmedValue && !selectedImage) {
-      setError("Write something or add an image to publish.");
+    if (!trimmedValue && selectedImages.length === 0) {
+      setError("Write something or add media to publish.");
       return;
     }
 
@@ -45,12 +49,12 @@ function PostForm({ value, onChange, onSubmit }) {
     setPublishing(true);
 
     try {
-      const result = await onSubmit(trimmedValue, isAnonymous, selectedImage);
+      const result = await onSubmit(trimmedValue, isAnonymous, selectedImages);
 
       if (result === false || result?.success === false) {
         setError(result?.error || "Something went wrong. Please try again.");
       } else {
-        setSelectedImage(null);
+        setSelectedImages([]);
       }
     } catch (submitError) {
       setError(submitError?.message || "Something went wrong. Please try again.");
@@ -69,28 +73,37 @@ function PostForm({ value, onChange, onSubmit }) {
 
   const handleImageChange = (event) => {
     const input = event.currentTarget;
-    const file = input.files?.[0] || null;
+    const files = Array.from(input.files || []);
 
-    if (!file) {
+    if (!files.length) {
       return;
     }
 
-    const validationMessage = validatePostImage(file);
+    const includesVideo = files.some((file) => isPostVideoFile(file));
+
+    if (includesVideo && files.length > 1) {
+      setError("Select one video or multiple images.");
+      setSelectedImages([]);
+      input.value = "";
+      return;
+    }
+
+    const validationMessage = files.map(validatePostImage).find(Boolean);
 
     if (validationMessage) {
       setError(validationMessage);
-      setSelectedImage(null);
+      setSelectedImages([]);
       input.value = "";
       return;
     }
 
     setError("");
-    setSelectedImage(file);
+    setSelectedImages(files);
     input.value = "";
   };
 
   const handleRemoveImage = () => {
-    setSelectedImage(null);
+    setSelectedImages([]);
     setError("");
   };
 
@@ -114,14 +127,35 @@ function PostForm({ value, onChange, onSubmit }) {
         }`}
       />
 
-      {previewUrl ? (
+      {previewUrls.length ? (
         <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
           <div className="relative">
-            <img
-              src={previewUrl}
-              alt="Selected post preview"
-              className="max-h-[360px] w-full object-contain"
-            />
+            {selectedFileIsVideo ? (
+              <video
+                src={previewUrls[0]}
+                controls
+                muted
+                playsInline
+                preload="metadata"
+                className="max-h-[360px] w-full bg-black object-contain"
+              />
+            ) : (
+              <div className="flex snap-x snap-mandatory overflow-x-auto">
+                {previewUrls.map((previewUrl, index) => (
+                  <img
+                    key={previewUrl}
+                    src={previewUrl}
+                    alt={`Selected post preview ${index + 1}`}
+                    className="max-h-[360px] w-full shrink-0 snap-center object-contain"
+                  />
+                ))}
+              </div>
+            )}
+            {previewUrls.length > 1 ? (
+              <span className="absolute bottom-3 left-3 rounded-full bg-black/70 px-3 py-1.5 text-xs font-semibold text-white">
+                {previewUrls.length} images
+              </span>
+            ) : null}
             <button
               type="button"
               onClick={handleRemoveImage}
@@ -210,7 +244,7 @@ function PostForm({ value, onChange, onSubmit }) {
                 : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
             }`}
           >
-            Image
+            Media
           </button>
 
           <button
@@ -231,7 +265,8 @@ function PostForm({ value, onChange, onSubmit }) {
       <input
         ref={imageInputRef}
         type="file"
-        accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+        multiple
+        accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm,image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm"
         className="hidden"
         onChange={handleImageChange}
       />
@@ -240,21 +275,36 @@ function PostForm({ value, onChange, onSubmit }) {
 }
 
 function validatePostImage(file) {
-  if (file.size > MAX_POST_IMAGE_FILE_SIZE_BYTES) {
+  const extension = (file.name.split(".").pop() || "").toLowerCase();
+  const isImage = POST_IMAGE_ALLOWED_EXTENSIONS.has(extension);
+  const isVideo = POST_VIDEO_ALLOWED_EXTENSIONS.has(extension);
+
+  if (!isImage && !isVideo) {
+    return "Post media must be JPG, JPEG, PNG, WEBP, MP4, MOV, or WebM.";
+  }
+
+  if (isImage && file.size > MAX_POST_IMAGE_FILE_SIZE_BYTES) {
     return "Post image must be 5 MB or smaller.";
   }
 
-  const extension = (file.name.split(".").pop() || "").toLowerCase();
+  if (isVideo && file.size > MAX_POST_VIDEO_FILE_SIZE_BYTES) {
+    return "Post video must be 50 MB or smaller.";
+  }
 
-  if (!POST_IMAGE_ALLOWED_EXTENSIONS.has(extension)) {
+  if (file.type && isImage && !POST_IMAGE_ALLOWED_TYPES.has(file.type)) {
     return "Post image must be JPG, JPEG, PNG, or WEBP.";
   }
 
-  if (file.type && !POST_IMAGE_ALLOWED_TYPES.has(file.type)) {
-    return "Post image must be JPG, JPEG, PNG, or WEBP.";
+  if (file.type && isVideo && !POST_VIDEO_ALLOWED_TYPES.has(file.type)) {
+    return "Post video must be MP4, MOV, or WebM.";
   }
 
   return "";
+}
+
+function isPostVideoFile(file) {
+  const extension = (file.name.split(".").pop() || "").toLowerCase();
+  return file.type?.startsWith("video/") || POST_VIDEO_ALLOWED_EXTENSIONS.has(extension);
 }
 
 export default PostForm;

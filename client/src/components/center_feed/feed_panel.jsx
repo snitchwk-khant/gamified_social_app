@@ -16,6 +16,8 @@ function FeedPanel({ posts, onCommentCreated, onDeletePost }) {
           authorAvatar={post.author_avatar}
           imageUrl={post.image_url}
           profile={post.profile}
+          likeCount={post.like_count}
+          userReaction={post.user_reaction}
           onCommentCreated={onCommentCreated}
           onDeletePost={onDeletePost}
         />

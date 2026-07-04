@@ -35,14 +35,14 @@ function ShopProfilePage() {
       <HeroHeader shop={profileData} isDark={isDark} userId={user?.id} />
       <EmployeeOfTheMonthCard employee={profileData.employeeOfMonth} isDark={isDark} userId={user?.id} />
 
-      <div className={`overflow-x-auto rounded-2xl border p-2 ${isDark ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-white"}`}>
-        <div className="flex min-w-max gap-2">
+      <div className={`rounded-2xl border p-2 ${isDark ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-white"}`}>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           {tabs.map((tab) => (
             <button
               key={tab}
               type="button"
               onClick={() => setActiveTab(tab)}
-              className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+              className={`rounded-xl px-3 py-2 text-sm font-semibold transition sm:px-4 ${
                 activeTab === tab
                   ? "bg-[#c446ff] text-white"
                   : isDark

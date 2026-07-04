@@ -1,6 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/auth_context";
-import { getProfilePath } from "../../utils/profile_path";
+import { AvatarGroup } from "./shop_leaderboard_table";
 import { getShopPath } from "../../utils/shop_path";
 
 const numberFormatter = new Intl.NumberFormat();
@@ -10,34 +9,43 @@ function formatNumber(value) {
 }
 
 function formatRank(rank) {
-  if (rank === 1) return "🥇";
-  if (rank === 2) return "🥈";
-  if (rank === 3) return "🥉";
-  return rank;
+  return `#${rank}`;
 }
 
-function getInitials(name, email) {
-  const source = name || email || "Employee";
-  return (
-    source
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0]?.toUpperCase())
-      .join("") || "E"
-  );
+function formatRankBadge(rank) {
+  if (rank === 1) {
+    return "🥇 #1";
+  }
+
+  if (rank === 2) {
+    return "🥈 #2";
+  }
+
+  if (rank === 3) {
+    return "🥉 #3";
+  }
+
+  return formatRank(rank);
 }
 
-function getAchievementClass(achievement, isDark) {
-  if (achievement >= 100) {
-    return isDark ? "bg-emerald-950 text-emerald-200" : "bg-emerald-50 text-emerald-700";
+function getRankBadgeClass(rank, isDark) {
+  if (rank === 1) {
+    return isDark ? "bg-yellow-500/15 text-yellow-200" : "bg-yellow-50 text-yellow-700";
   }
 
-  if (achievement >= 80) {
-    return isDark ? "bg-amber-950 text-amber-200" : "bg-amber-50 text-amber-700";
+  if (rank === 2) {
+    return isDark ? "bg-slate-700 text-slate-100" : "bg-slate-100 text-slate-700";
   }
 
-  return isDark ? "bg-rose-950 text-rose-200" : "bg-rose-50 text-rose-700";
+  if (rank === 3) {
+    return isDark ? "bg-orange-500/15 text-orange-200" : "bg-orange-50 text-orange-700";
+  }
+
+  return isDark ? "bg-slate-900 text-slate-300" : "bg-slate-100 text-slate-600";
+}
+
+function getProgressWidth(achievement) {
+  return `${Math.min(100, Math.max(0, Number(achievement || 0)))}%`;
 }
 
 function ShopTopCards({ rows = [], isDark = false }) {
@@ -55,88 +63,91 @@ function ShopTopCards({ rows = [], isDark = false }) {
     navigate(getShopPath(shopId));
   };
 
-  return (
-    <div className="grid gap-4 lg:grid-cols-3">
-      {rows.map((target) => (
-        <div
-          key={target.id}
-          role="link"
-          tabIndex={0}
-          onClick={(event) => handleOpenShop(event, target.shop_id)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              navigate(getShopPath(target.shop_id));
-            }
-          }}
-          className={`cursor-pointer rounded-2xl border p-5 transition hover:-translate-y-0.5 ${
-            isDark ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-white"
+  const renderTopCard = (target) => (
+    <div
+      key={target.id}
+      role="link"
+      tabIndex={0}
+      onClick={(event) => handleOpenShop(event, target.shop_id)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          navigate(getShopPath(target.shop_id));
+        }
+      }}
+      className={`flex min-h-[190px] cursor-pointer flex-col rounded-2xl border p-3 text-center shadow-sm transition hover:-translate-y-0.5 sm:min-h-[200px] sm:p-4 ${
+        isDark
+          ? target.rank === 1
+            ? "border-[#c446ff]/40 bg-gradient-to-br from-slate-950 via-slate-950 to-[#241333] shadow-[#c446ff]/10"
+            : "border-[#c446ff]/25 bg-slate-950 shadow-[#c446ff]/5"
+          : target.rank === 1
+            ? "border-[#c446ff]/30 bg-gradient-to-br from-white via-white to-[#fbf4ff] shadow-[#c446ff]/10"
+            : "border-[#c446ff]/20 bg-white shadow-[#c446ff]/5"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span
+          className={`rounded-full px-2.5 py-1 text-[11px] font-bold sm:text-xs ${getRankBadgeClass(target.rank, isDark)}`}
+          aria-label={`Rank ${target.rank}`}
+        >
+          {formatRankBadge(target.rank)}
+        </span>
+        <span
+          className={`flex h-7 w-7 items-center justify-center rounded-full text-sm ${
+            isDark ? "bg-[#c446ff]/15 text-purple-100" : "bg-[#f6e8ff] text-[#c446ff]"
+          }`}
+          aria-hidden="true"
+        >
+          🏆
+        </span>
+      </div>
+
+      <div className="mt-3 flex justify-center">
+        <AvatarGroup employees={target.employees} isDark={isDark} size="sm" />
+      </div>
+
+      <Link
+        to={getShopPath(target.shop_id)}
+        className={`mx-auto mt-3 block max-w-full truncate text-sm font-bold transition hover:text-[#c446ff] sm:text-base ${
+          isDark ? "text-slate-100" : "text-slate-950"
+        }`}
+      >
+        {target.shopName}
+      </Link>
+
+      <p className={`mt-2 text-xs font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>Achievement</p>
+
+      <div className="mt-1 flex justify-center">
+        <span
+          className={`rounded-full px-3 py-1 text-lg font-black leading-none sm:text-xl ${
+            isDark ? "bg-[#c446ff]/15 text-slate-100" : "bg-[#f6e8ff] text-[#c446ff]"
           }`}
         >
-          <div className="flex items-start justify-between gap-4">
-            <Link
-              to={getShopPath(target.shop_id)}
-              className={`min-w-0 truncate text-lg font-semibold transition hover:text-[#c446ff] ${isDark ? "text-slate-100" : "text-slate-950"}`}
-            >
-              {target.shopName}
-            </Link>
-            <span className="shrink-0 text-3xl">{formatRank(target.rank)}</span>
-          </div>
-          <div className="mt-5 space-y-4">
-            <AvatarGroup employees={target.employees} isDark={isDark} />
-            <div>
-              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getAchievementClass(target.achievement, isDark)}`}>
-                {formatNumber(target.achievement)}%
-              </span>
-            </div>
-          </div>
+          {formatNumber(target.achievement)}%
+        </span>
+      </div>
+
+      <div className={`mt-auto h-1.5 w-full overflow-hidden rounded-full ${isDark ? "bg-slate-900" : "bg-slate-100"}`}>
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-[#c446ff] to-sky-400"
+          style={{ width: getProgressWidth(target.achievement) }}
+        />
+      </div>
+    </div>
+  );
+
+  const [featuredShop, ...secondaryShops] = rows;
+
+  return (
+    <div className="space-y-3">
+      {featuredShop ? renderTopCard(featuredShop) : null}
+      {secondaryShops.length ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {secondaryShops.map((target) => renderTopCard(target))}
         </div>
-      ))}
+      ) : null}
     </div>
   );
 }
 
 export default ShopTopCards;
-
-function AvatarGroup({ employees = [], isDark = false }) {
-  const { user } = useAuth();
-  const visibleEmployees = employees.slice(0, 3);
-  const hiddenCount = Math.max(0, employees.length - visibleEmployees.length);
-
-  return (
-    <div className="flex items-center">
-      <div className="flex -space-x-3">
-        {visibleEmployees.map((employee) => {
-          const employeeName = employee.full_name || employee.email || "Employee";
-
-          return (
-            <Link
-              to={getProfilePath(employee.id, user?.id)}
-              key={employee.id}
-              className={`flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border-2 bg-[#f6e8ff] text-sm font-bold text-[#c446ff] shadow-sm ${
-                isDark ? "border-slate-950" : "border-white"
-              }`}
-              aria-label={`Open ${employeeName} profile`}
-              title={employeeName}
-            >
-              {employee.avatar_url ? (
-                <img src={employee.avatar_url} alt={employeeName} className="h-full w-full object-cover" />
-              ) : (
-                getInitials(employee.full_name, employee.email)
-              )}
-            </Link>
-          );
-        })}
-      </div>
-      {hiddenCount ? (
-        <span
-          className={`ml-2 rounded-full px-2.5 py-1 text-xs font-semibold ${
-            isDark ? "bg-slate-800 text-slate-200" : "bg-slate-100 text-slate-600"
-          }`}
-        >
-          +{hiddenCount}
-        </span>
-      ) : null}
-    </div>
-  );
-}

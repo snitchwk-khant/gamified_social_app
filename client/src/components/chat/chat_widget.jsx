@@ -108,7 +108,7 @@ function ChatWidget({ fullScreen = false }) {
   };
 
   return (
-    <div className={fullScreen ? "flex h-full min-h-0 flex-col" : "flex h-[calc(100vh-7rem)] min-h-[520px] flex-col gap-5 xl:h-full xl:min-h-0"}>
+    <div className={fullScreen ? "flex h-full min-h-0 flex-col" : "flex h-[calc(100vh-7rem)] min-h-[420px] flex-col gap-5 sm:min-h-[520px] xl:h-full xl:min-h-0"}>
       <div
         className={`flex h-full min-h-0 flex-col ${
           fullScreen ? "border-0 p-3" : "rounded-2xl border p-3 sm:p-4"
