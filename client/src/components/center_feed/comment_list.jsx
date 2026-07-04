@@ -29,13 +29,40 @@ function formatRelativeTime(dateString) {
   return `${diffYears}y ago`;
 }
 
-function CommentList({ comments, loading, onDeleteComment }) {
+function renderCommentContent(content, isDark) {
+  return String(content || "")
+    .split(/(@[^\s@]+)/g)
+    .map((part, index) => {
+      if (part.startsWith("@")) {
+        return (
+          <span key={`${part}-${index}`} className={isDark ? "font-semibold text-sky-300" : "font-semibold text-[#c446ff]"}>
+            {part}
+          </span>
+        );
+      }
+
+      return part;
+    });
+}
+
+function CommentList({ comments, loading, onDeleteComment, onReplyComment, replyingToCommentId, renderReplyForm }) {
   const { user } = useAuth();
   const { isDark } = useTheme();
   const [activeMenuCommentId, setActiveMenuCommentId] = useState("");
   const [confirmDeleteComment, setConfirmDeleteComment] = useState(null);
   const [deletingCommentId, setDeletingCommentId] = useState("");
   const [deleteError, setDeleteError] = useState("");
+  const rootComments = comments.filter((comment) => !comment.parent_comment_id);
+  const repliesByParent = comments.reduce((groupedReplies, comment) => {
+    if (!comment.parent_comment_id) {
+      return groupedReplies;
+    }
+
+    return {
+      ...groupedReplies,
+      [comment.parent_comment_id]: [...(groupedReplies[comment.parent_comment_id] || []), comment],
+    };
+  }, {});
 
   if (loading) {
     return <p className={`text-sm ${isDark ? "text-slate-400" : "text-slate-500"}`}>Loading comments...</p>;
@@ -54,9 +81,7 @@ function CommentList({ comments, loading, onDeleteComment }) {
     );
   }
 
-  return (
-    <div className="space-y-5">
-      {comments.map((comment) => {
+  function renderComment(comment, isReply = false) {
         const isAnonymousComment = Boolean(comment.is_anonymous);
         const profile = comment.profile || null;
         const fullName = isAnonymousComment ? "Masked" : profile?.full_name || comment.author_name || "";
@@ -71,7 +96,7 @@ function CommentList({ comments, loading, onDeleteComment }) {
         return (
           <div
             key={comment.id}
-            className="flex items-start gap-3"
+            className={`flex items-start gap-3 ${isReply ? "ml-8" : ""}`}
           >
             {avatarSrc ? (
               profilePath ? (
@@ -201,13 +226,41 @@ function CommentList({ comments, loading, onDeleteComment }) {
                 isDark ? "bg-slate-900 text-slate-200" : "bg-slate-100 text-slate-700"
               }`}>
                 <p className="text-sm leading-6">
-                  {comment.content}
+                  {renderCommentContent(comment.content, isDark)}
                 </p>
               </div>
+              {!isReply ? (
+                <button
+                  type="button"
+                  onClick={() => onReplyComment?.(comment)}
+                  className={`mt-2 text-xs font-semibold transition ${
+                    isDark ? "text-slate-400 hover:text-sky-300" : "text-slate-500 hover:text-[#c446ff]"
+                  }`}
+                >
+                  Reply
+                </button>
+              ) : null}
             </div>
           </div>
         );
-      })}
+  }
+
+  return (
+    <div className="space-y-5">
+      {rootComments.map((comment) => (
+        <div key={comment.id} className="space-y-3">
+          {renderComment(comment)}
+          {replyingToCommentId === comment.id && typeof renderReplyForm === "function" ? (
+            <div className={`ml-8 rounded-3xl border p-3 ${isDark ? "border-slate-800 bg-slate-950/60" : "border-slate-200 bg-white"}`}>
+              <p className={`mb-2 text-xs font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                Replying to {comment.is_anonymous ? "Masked" : comment.profile?.full_name || comment.author_name || "this comment"}...
+              </p>
+              {renderReplyForm(comment)}
+            </div>
+          ) : null}
+          {(repliesByParent[comment.id] || []).map((reply) => renderComment(reply, true))}
+        </div>
+      ))}
 
       {confirmDeleteComment ? (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4">

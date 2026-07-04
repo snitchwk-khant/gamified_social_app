@@ -1,6 +1,6 @@
 import PostCard from "./post_card";
 
-function FeedPanel({ posts, onCommentCreated, onDeletePost }) {
+function FeedPanel({ posts, onCommentCreated, onDeletePost, onReactionUpdated }) {
   return (
     <div className="space-y-6">
       {posts.map((post) => (
@@ -17,9 +17,11 @@ function FeedPanel({ posts, onCommentCreated, onDeletePost }) {
           imageUrl={post.image_url}
           profile={post.profile}
           likeCount={post.like_count}
+          reactionsCount={post.reactions_count}
           userReaction={post.user_reaction}
           onCommentCreated={onCommentCreated}
           onDeletePost={onDeletePost}
+          onReactionUpdated={onReactionUpdated}
         />
       ))}
     </div>

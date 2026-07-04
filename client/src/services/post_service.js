@@ -6,8 +6,7 @@ const POST_IMAGE_ALLOWED_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"]);
 const POST_IMAGE_ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const POST_VIDEO_ALLOWED_EXTENSIONS = new Set(["mp4", "mov", "webm"]);
 const POST_VIDEO_ALLOWED_TYPES = new Set(["video/mp4", "video/quicktime", "video/webm"]);
-export const POST_REACTION_OPTIONS = ["❤️"];
-const DEFAULT_POST_REACTION = "❤️";
+const DEFAULT_POST_REACTION = "love";
 
 function buildReactionSummary(likeRows = [], currentUserId = "") {
   const reactionCounts = {};
@@ -18,7 +17,7 @@ function buildReactionSummary(likeRows = [], currentUserId = "") {
       continue;
     }
 
-    reactionCounts[DEFAULT_POST_REACTION] = Number(reactionCounts[DEFAULT_POST_REACTION] || 0) + 1;
+    reactionCounts["❤️"] = Number(reactionCounts["❤️"] || 0) + 1;
 
     if (currentUserId && likeRow.user_id === currentUserId) {
       userReaction = DEFAULT_POST_REACTION;
@@ -30,7 +29,7 @@ function buildReactionSummary(likeRows = [], currentUserId = "") {
   return {
     reaction_counts: reactionCounts,
     reactions_count: reactionsCount,
-    like_count: Number(reactionCounts[DEFAULT_POST_REACTION] || 0),
+    like_count: reactionsCount,
     user_reaction: userReaction,
   };
 }
@@ -54,9 +53,10 @@ async function getLikesByPostIds(postIds = []) {
   }
 
   const { data, error } = await supabase
-    .from("likes")
-    .select("post_id, user_id")
-    .in("post_id", postIds);
+    .from("post_reactions")
+    .select("post_id, user_id, reaction")
+    .in("post_id", postIds)
+    .eq("reaction", DEFAULT_POST_REACTION);
 
   if (error) {
     console.error("getLikesByPostIds Error:", error);
@@ -72,9 +72,10 @@ export async function getPostLoves(postId) {
   }
 
   const { data, error } = await supabase
-    .from("likes")
-    .select("id, user_id, created_at")
+    .from("post_reactions")
+    .select("id, user_id, reaction, created_at")
     .eq("post_id", postId)
+    .eq("reaction", DEFAULT_POST_REACTION)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -221,10 +222,11 @@ export async function getPostReactionSummary(postId) {
 
   const currentUserId = await getCurrentUserId();
 
-  const { data, error } = await supabase
-    .from("likes")
-    .select("post_id, user_id")
-    .eq("post_id", postId);
+  const { data, error, count } = await supabase
+    .from("post_reactions")
+    .select("post_id, user_id, reaction", { count: "exact" })
+    .eq("post_id", postId)
+    .eq("reaction", DEFAULT_POST_REACTION);
 
   if (error) {
     console.error("getPostReactionSummary Error:", error);
@@ -236,12 +238,25 @@ export async function getPostReactionSummary(postId) {
     };
   }
 
-  return buildReactionSummary(data || [], currentUserId);
+  return {
+    ...buildReactionSummary(data || [], currentUserId),
+    reaction_counts: { "❤️": Number(count || 0) },
+    reactions_count: Number(count || 0),
+    like_count: Number(count || 0),
+  };
 }
 
 export async function togglePostLike(postId) {
+  return setPostReaction(postId, DEFAULT_POST_REACTION);
+}
+
+export async function setPostReaction(postId, reaction) {
   if (!postId) {
     return { data: null, error: new Error("Missing post ID."), summary: null };
+  }
+
+  if (reaction !== DEFAULT_POST_REACTION) {
+    return { data: null, error: new Error("Invalid reaction."), summary: null };
   }
 
   const currentUserId = await getCurrentUserId();
@@ -251,8 +266,8 @@ export async function togglePostLike(postId) {
   }
 
   const { data: existingLike, error: existingLikeError } = await supabase
-    .from("likes")
-    .select("id")
+    .from("post_reactions")
+    .select("id, reaction")
     .eq("post_id", postId)
     .eq("user_id", currentUserId)
     .maybeSingle();
@@ -265,20 +280,24 @@ export async function togglePostLike(postId) {
   let mutationError = null;
   let data = null;
 
-  if (existingLike?.id) {
-    const { error } = await supabase.from("likes").delete().eq("id", existingLike.id);
+  if (existingLike?.id && existingLike.reaction === reaction) {
+    const { error } = await supabase.from("post_reactions").delete().eq("id", existingLike.id);
     mutationError = error || null;
     data = null;
   } else {
     const insertPayload = {
       user_id: currentUserId,
       post_id: postId,
+      reaction: DEFAULT_POST_REACTION,
+      updated_at: new Date().toISOString(),
     };
 
     const { data: insertedLike, error } = await supabase
-      .from("likes")
-      .insert(insertPayload)
-      .select("id, post_id, user_id")
+      .from("post_reactions")
+      .upsert(insertPayload, {
+        onConflict: "post_id,user_id",
+      })
+      .select("id, post_id, user_id, reaction")
       .single();
 
     mutationError = error || null;
@@ -287,62 +306,6 @@ export async function togglePostLike(postId) {
 
   if (mutationError) {
     console.error("togglePostLike Mutation Error:", mutationError);
-    return { data: null, error: mutationError, summary: null };
-  }
-
-  const summary = await getPostReactionSummary(postId);
-  return { data, error: null, summary };
-}
-
-export async function setPostReaction(postId, reaction) {
-  if (!postId) {
-    return { data: null, error: new Error("Missing post ID."), summary: null };
-  }
-
-  if (!POST_REACTION_OPTIONS.includes(reaction)) {
-    return { data: null, error: new Error("Invalid reaction."), summary: null };
-  }
-
-  const currentUserId = await getCurrentUserId();
-
-  if (!currentUserId) {
-    return { data: null, error: new Error("No authenticated user found."), summary: null };
-  }
-
-  const { data: existingLike, error: existingLikeError } = await supabase
-    .from("likes")
-    .select("id")
-    .eq("post_id", postId)
-    .eq("user_id", currentUserId)
-    .maybeSingle();
-
-  if (existingLikeError) {
-    console.error("setPostReaction Fetch Error:", existingLikeError);
-    return { data: null, error: existingLikeError, summary: null };
-  }
-
-  let data = null;
-  let mutationError = null;
-
-  if (existingLike?.id) {
-    data = existingLike;
-    mutationError = null;
-  } else {
-    const { data: insertedLike, error } = await supabase
-      .from("likes")
-      .insert({
-        user_id: currentUserId,
-        post_id: postId,
-      })
-      .select("id, post_id, user_id")
-      .single();
-
-    data = insertedLike || null;
-    mutationError = error || null;
-  }
-
-  if (mutationError) {
-    console.error("setPostReaction Mutation Error:", mutationError);
     return { data: null, error: mutationError, summary: null };
   }
 
@@ -646,7 +609,7 @@ export function subscribeToPostLikes(postIdOrCallback, maybeCallback) {
   const changeConfig = {
     event: "*",
     schema: "public",
-    table: "likes",
+    table: "post_reactions",
   };
 
   if (postId) {
@@ -654,7 +617,7 @@ export function subscribeToPostLikes(postIdOrCallback, maybeCallback) {
   }
 
   const channel = supabase
-    .channel(postId ? `post-likes-realtime-${postId}` : "post-likes-realtime")
+    .channel(postId ? `post-reactions-realtime-${postId}` : "post-reactions-realtime")
     .on(
       "postgres_changes",
       changeConfig,

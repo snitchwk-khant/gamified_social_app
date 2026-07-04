@@ -530,6 +530,28 @@ function HomePage() {
     );
   }, []);
 
+  const handlePostReactionUpdated = useCallback((postId, summary) => {
+    if (!postId || !summary) {
+      return;
+    }
+
+    setPosts((prevPosts) =>
+      prevPosts.map((post) => {
+        if (post.id !== postId) {
+          return post;
+        }
+
+        return {
+          ...post,
+          reaction_counts: summary.reaction_counts ?? post.reaction_counts,
+          reactions_count: Number(summary.reactions_count ?? summary.like_count ?? post.reactions_count ?? 0),
+          like_count: Number(summary.like_count ?? summary.reactions_count ?? post.like_count ?? 0),
+          user_reaction: summary.user_reaction ?? null,
+        };
+      })
+    );
+  }, []);
+
   return (
     <div className="flex h-full min-h-[calc(100vh-64px)] min-w-0 flex-col">
       <section
@@ -877,6 +899,7 @@ function HomePage() {
         announcementsError={announcementsError}
         onRetryAnnouncements={loadAnnouncements}
         onDeletePost={handleDeletePost}
+        onReactionUpdated={handlePostReactionUpdated}
       />
 
       <StoryViewer

@@ -3,7 +3,13 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../context/auth_context";
 import { useTheme } from "../../context/theme_context";
 import { supabase } from "../../lib/supabase";
-import { getPostLoves, getPostReactionSummary, parsePostMediaUrls, subscribeToPostLikes, togglePostLike } from "../../services/post_service";
+import {
+  getPostLoves,
+  getPostReactionSummary,
+  parsePostMediaUrls,
+  setPostReaction,
+  subscribeToPostLikes,
+} from "../../services/post_service";
 import { getProfilePath } from "../../utils/profile_path";
 import CommentForm from "./comment_form";
 import CommentList from "./comment_list";
@@ -133,6 +139,12 @@ function FeedImageCarousel({ urls, isDark }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerIndex, setViewerIndex] = useState(0);
+  const [loadedIndexes, setLoadedIndexes] = useState(() => new Set([0, 1]));
+  const [dragOffset, setDragOffset] = useState(0);
+  const dragOffsetRef = useRef(0);
+  const pointerStartRef = useRef(null);
+  const suppressClickRef = useRef(false);
+  const lastWheelMoveRef = useRef(0);
   const touchStartRef = useRef(null);
   const hasMultipleImages = urls.length > 1;
 
@@ -140,7 +152,20 @@ function FeedImageCarousel({ urls, isDark }) {
     setActiveIndex(0);
     setViewerIndex(0);
     setViewerOpen(false);
+    setLoadedIndexes(new Set([0, 1]));
+    setDragOffset(0);
+    dragOffsetRef.current = 0;
   }, [urls]);
+
+  useEffect(() => {
+    setLoadedIndexes((currentIndexes) => {
+      const nextIndexes = new Set(currentIndexes);
+      nextIndexes.add(activeIndex);
+      nextIndexes.add(activeIndex - 1);
+      nextIndexes.add(activeIndex + 1);
+      return nextIndexes;
+    });
+  }, [activeIndex]);
 
   function clampIndex(nextIndex) {
     return Math.max(0, Math.min(urls.length - 1, nextIndex));
@@ -153,6 +178,88 @@ function FeedImageCarousel({ urls, isDark }) {
     }
 
     setActiveIndex((currentIndex) => clampIndex(currentIndex + direction));
+  }
+
+  function handlePointerDown(event) {
+    if (!hasMultipleImages) {
+      return;
+    }
+
+    pointerStartRef.current = {
+      id: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      dragging: false,
+    };
+    suppressClickRef.current = false;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+
+  function handlePointerMove(event) {
+    const start = pointerStartRef.current;
+
+    if (!start || start.id !== event.pointerId) {
+      return;
+    }
+
+    const deltaX = event.clientX - start.x;
+    const deltaY = event.clientY - start.y;
+
+    if (!start.dragging && Math.abs(deltaX) < 8) {
+      return;
+    }
+
+    if (!start.dragging && Math.abs(deltaY) > Math.abs(deltaX)) {
+      return;
+    }
+
+    start.dragging = true;
+    suppressClickRef.current = true;
+    dragOffsetRef.current = deltaX;
+    setDragOffset(deltaX);
+    event.preventDefault();
+  }
+
+  function handlePointerEnd(event) {
+    const start = pointerStartRef.current;
+
+    if (!start || start.id !== event.pointerId) {
+      return;
+    }
+
+    const finalOffset = dragOffsetRef.current;
+    pointerStartRef.current = null;
+    dragOffsetRef.current = 0;
+    setDragOffset(0);
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+
+    if (!start.dragging || Math.abs(finalOffset) < 45) {
+      setTimeout(() => {
+        suppressClickRef.current = false;
+      }, 0);
+      return;
+    }
+
+    moveImage(finalOffset < 0 ? 1 : -1);
+    setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 0);
+  }
+
+  function handleHorizontalWheel(event) {
+    if (!hasMultipleImages || Math.abs(event.deltaX) <= Math.abs(event.deltaY) || Math.abs(event.deltaX) < 24) {
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastWheelMoveRef.current < 350) {
+      event.preventDefault();
+      return;
+    }
+
+    lastWheelMoveRef.current = now;
+    event.preventDefault();
+    moveImage(event.deltaX > 0 ? 1 : -1);
   }
 
   function handleTouchStart(event) {
@@ -185,6 +292,10 @@ function FeedImageCarousel({ urls, isDark }) {
   }
 
   function openViewer(index) {
+    if (suppressClickRef.current) {
+      return;
+    }
+
     setViewerIndex(index);
     setViewerOpen(true);
   }
@@ -196,13 +307,16 @@ function FeedImageCarousel({ urls, isDark }) {
   return (
     <>
       <div
-        className="relative overflow-hidden rounded-2xl"
-        onTouchStart={handleTouchStart}
-        onTouchEnd={(event) => handleTouchEnd(event)}
+        className="relative overflow-hidden rounded-2xl touch-pan-y"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerEnd}
+        onPointerCancel={handlePointerEnd}
+        onWheel={handleHorizontalWheel}
       >
         <div
-          className="flex transition-transform duration-200 ease-out"
-          style={{ transform: `translateX(-${activeIndex * 100}%)` }}
+          className={`flex ${dragOffset ? "" : "transition-transform duration-200 ease-out"}`}
+          style={{ transform: `translateX(calc(-${activeIndex * 100}% + ${dragOffset}px))` }}
         >
           {urls.map((url, index) => (
             <button
@@ -212,29 +326,46 @@ function FeedImageCarousel({ urls, isDark }) {
               className="w-full shrink-0 cursor-pointer bg-transparent p-0"
               aria-label={`Open image ${index + 1}`}
             >
-              <img
-                src={url}
-                alt={`Post attachment ${index + 1}`}
-                loading="lazy"
-                className="max-h-[520px] w-full object-contain"
-              />
+              {loadedIndexes.has(index) ? (
+                <img
+                  src={url}
+                  alt={`Post attachment ${index + 1}`}
+                  loading={Math.abs(index - activeIndex) <= 1 ? "eager" : "lazy"}
+                  draggable={false}
+                  className="max-h-[520px] w-full select-none object-contain"
+                />
+              ) : (
+                <div className={`aspect-video w-full ${isDark ? "bg-slate-950" : "bg-slate-100"}`} />
+              )}
             </button>
           ))}
         </div>
 
         {hasMultipleImages ? (
-          <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5">
-            {urls.map((url, index) => (
-              <span
-                key={`${url}-indicator-${index}`}
-                className={`h-1.5 rounded-full transition-all ${
-                  index === activeIndex ? "w-4 bg-white" : "w-1.5 bg-white/45"
-                }`}
-              />
-            ))}
+          <div className="absolute right-3 top-3 rounded-full bg-black/65 px-2.5 py-1 text-xs font-semibold text-white shadow-lg">
+            {activeIndex + 1} / {urls.length}
           </div>
         ) : null}
       </div>
+
+      {hasMultipleImages ? (
+        <div className="mt-3 flex items-center justify-center gap-1.5">
+          {urls.map((url, index) => (
+            <span
+              key={`${url}-indicator-${index}`}
+              className={`h-1.5 rounded-full transition-all ${
+                index === activeIndex
+                  ? isDark
+                    ? "w-4 bg-sky-300"
+                    : "w-4 bg-[#c446ff]"
+                  : isDark
+                    ? "w-1.5 bg-slate-600"
+                    : "w-1.5 bg-slate-300"
+              }`}
+            />
+          ))}
+        </div>
+      ) : null}
 
       {viewerOpen ? (
         <div
@@ -298,6 +429,7 @@ function PostCard({
   date,
   commentsCount = 0,
   likeCount = 0,
+  reactionsCount = 0,
   userReaction = null,
   isAnonymous = false,
   authorUserId = null,
@@ -307,6 +439,7 @@ function PostCard({
   profile = null,
   onCommentCreated,
   onDeletePost,
+  onReactionUpdated,
 }) {
   const { user } = useAuth();
   const { isDark } = useTheme();
@@ -315,13 +448,15 @@ function PostCard({
   const [commentOpen, setCommentOpen] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
   const [commentCount, setCommentCount] = useState(commentsCount);
+  const [replyingToComment, setReplyingToComment] = useState(null);
+  const [mentionUsers, setMentionUsers] = useState([]);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const [loveListOpen, setLoveListOpen] = useState(false);
   const [loveList, setLoveList] = useState([]);
   const [loveListLoading, setLoveListLoading] = useState(false);
   const [loveListError, setLoveListError] = useState("");
-  const [currentLoveCount, setCurrentLoveCount] = useState(likeCount);
+  const [currentLoveCount, setCurrentLoveCount] = useState(reactionsCount || likeCount);
   const [hasLoved, setHasLoved] = useState(Boolean(userReaction));
   const [loveToggling, setLoveToggling] = useState(false);
   const [loveAnimating, setLoveAnimating] = useState(false);
@@ -337,9 +472,9 @@ function PostCard({
   }, [commentsCount, id]);
 
   useEffect(() => {
-    setCurrentLoveCount(likeCount);
+    setCurrentLoveCount(Number(reactionsCount ?? likeCount ?? 0));
     setHasLoved(Boolean(userReaction));
-  }, [id, likeCount, userReaction]);
+  }, [id, likeCount, reactionsCount, userReaction]);
 
   useEffect(() => {
     if (!id) {
@@ -349,9 +484,12 @@ function PostCard({
     return subscribeToPostLikes(id, async () => {
       const summary = await getPostReactionSummary(id);
       setHasLoved(Boolean(summary.user_reaction));
-      setCurrentLoveCount(Number(summary.like_count || 0));
+      setCurrentLoveCount(Number(summary.reactions_count || summary.like_count || 0));
+      if (typeof onReactionUpdated === "function") {
+        onReactionUpdated(id, summary);
+      }
     });
-  }, [id]);
+  }, [id, onReactionUpdated]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -380,32 +518,9 @@ function PostCard({
     );
   }, [user?.avatar_url, user?.id]);
 
-  async function loadComments() {
-    setLoadingComments(true);
-
-    const { data, error } = await supabase
-      .from("comments")
-      .select("id, content, created_at, is_anonymous, user_id")
-      .eq("post_id", id)
-      .order("created_at", { ascending: true });
-
-    if (error) {
-      console.error("Load Comments Error:", {
-        code: error.code,
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        error,
-      });
-      setComments([]);
-      setCommentCount(0);
-      setLoadingComments(false);
-      return;
-    }
-
-    const commentRows = data || [];
+  async function formatCommentRows(commentRows) {
     const authorIds = [
-      ...new Set(commentRows.filter((comment) => !comment.is_anonymous && comment.user_id).map((comment) => comment.user_id)),
+      ...new Set((commentRows || []).filter((comment) => !comment.is_anonymous && comment.user_id).map((comment) => comment.user_id)),
     ];
 
     let profileMap = {};
@@ -429,7 +544,7 @@ function PostCard({
       }
     }
 
-    const formattedComments = commentRows.map((comment) => {
+    return (commentRows || []).map((comment) => {
       const profile = !comment.is_anonymous ? profileMap[comment.user_id] : null;
       const fullName = profile?.full_name || "";
 
@@ -446,6 +561,52 @@ function PostCard({
             },
       };
     });
+  }
+
+  async function loadMentionUsers() {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, full_name, avatar_url")
+      .order("full_name", { ascending: true });
+
+    if (error) {
+      console.error("Load Mention Users Error:", {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        error,
+      });
+      return;
+    }
+
+    setMentionUsers((data || []).filter((profileRow) => profileRow.id && profileRow.full_name));
+  }
+
+  async function loadComments() {
+    setLoadingComments(true);
+
+    const { data, error } = await supabase
+      .from("comments")
+      .select("id, content, created_at, is_anonymous, user_id, parent_comment_id")
+      .eq("post_id", id)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("Load Comments Error:", {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        error,
+      });
+      setComments([]);
+      setCommentCount(0);
+      setLoadingComments(false);
+      return;
+    }
+
+    const formattedComments = await formatCommentRows(data || []);
 
     setComments(formattedComments);
     setCommentCount(formattedComments.length);
@@ -456,6 +617,7 @@ function PostCard({
     if (!commentOpen) return;
 
     loadComments();
+    loadMentionUsers();
 
     const channel = supabase
       .channel(`comments-${id}`)
@@ -467,8 +629,32 @@ function PostCard({
           table: "comments",
           filter: `post_id=eq.${id}`,
         },
-        () => {
-          loadComments();
+        async (payload) => {
+          if (payload.eventType === "DELETE") {
+            const deletedCommentId = payload.old?.id;
+
+            if (!deletedCommentId) return;
+
+            setComments((currentComments) => {
+              const nextComments = currentComments.filter((comment) => comment.id !== deletedCommentId && comment.parent_comment_id !== deletedCommentId);
+              const removedCount = currentComments.length - nextComments.length;
+
+              if (removedCount) {
+                setCommentCount((currentCount) => Math.max(0, Number(currentCount || 0) - removedCount));
+              }
+
+              return nextComments;
+            });
+            return;
+          }
+
+          if (payload.new?.id) {
+            const [formattedComment] = await formatCommentRows([payload.new]);
+
+            if (formattedComment) {
+              upsertComment(formattedComment);
+            }
+          }
         }
       )
       .subscribe();
@@ -478,18 +664,98 @@ function PostCard({
     };
   }, [commentOpen, id]);
 
-  async function handleCommentSubmit(content, isAnonymous = false) {
+  function upsertComment(nextComment) {
+    setComments((currentComments) => {
+      const exists = currentComments.some((comment) => comment.id === nextComment.id);
+      const nextComments = exists
+        ? currentComments.map((comment) => (comment.id === nextComment.id ? nextComment : comment))
+        : [...currentComments, nextComment];
+
+      if (!exists) {
+        setCommentCount((currentCount) => Number(currentCount || 0) + 1);
+      }
+
+      return nextComments.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    });
+  }
+
+  function getMentionedUserIds(content) {
+    const normalizedContent = String(content || "").toLowerCase();
+
+    return [
+      ...new Set(
+        mentionUsers
+          .filter((mentionUser) => {
+            const name = mentionUser.full_name?.toLowerCase();
+            return name && normalizedContent.includes(`@${name}`);
+          })
+          .map((mentionUser) => mentionUser.id)
+      ),
+    ];
+  }
+
+  async function createCommentNotification(targetUserId, title, message, commentId) {
+    if (!targetUserId || targetUserId === user?.id) {
+      return;
+    }
+
+    const { error } = await supabase.rpc("create_comment_notification", {
+      target_user_id: targetUserId,
+      notification_title: title,
+      notification_message: message,
+      source_post_id: id,
+      source_comment_id: commentId,
+      notification_category: "Mention",
+    });
+
+    if (error) {
+      console.error("Create Comment Notification Error:", {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        error,
+      });
+    }
+  }
+
+  async function notifyCommentRecipients(content, insertedComment, parentComment = null) {
+    const recipientIds = new Map();
+
+    getMentionedUserIds(content).forEach((recipientId) => {
+      recipientIds.set(recipientId, "You were mentioned in a comment.");
+    });
+
+    if (parentComment?.user_id && !recipientIds.has(parentComment.user_id)) {
+      recipientIds.set(parentComment.user_id, "Someone replied to your comment.");
+    }
+
+    await Promise.all(
+      Array.from(recipientIds.entries()).map(([recipientId, title]) =>
+        createCommentNotification(recipientId, title, content, insertedComment.id)
+      )
+    );
+  }
+
+  async function handleCommentSubmit(content, isAnonymous = false, parentComment = null) {
     if (!user?.id) return false;
 
     const trimmedContent = content?.trim();
     if (!trimmedContent) return false;
 
-    const { error } = await supabase.from("comments").insert({
+    const insertPayload = {
       post_id: id,
       user_id: user.id,
       content: trimmedContent,
       is_anonymous: isAnonymous,
-    });
+      parent_comment_id: parentComment?.id || null,
+    };
+
+    const { data, error } = await supabase
+      .from("comments")
+      .insert(insertPayload)
+      .select("id, content, created_at, is_anonymous, user_id, parent_comment_id")
+      .single();
 
     if (error) {
       console.error("Comment Insert Error:", {
@@ -502,11 +768,15 @@ function PostCard({
       return false;
     }
 
+    const [formattedComment] = await formatCommentRows([data]);
+    upsertComment(formattedComment);
+    setReplyingToComment(null);
+
     if (typeof onCommentCreated === "function") {
       onCommentCreated(id);
     }
 
-    await loadComments();
+    await notifyCommentRecipients(trimmedContent, data, parentComment);
 
     return true;
   }
@@ -533,8 +803,13 @@ function PostCard({
       return false;
     }
 
-    setComments((currentComments) => currentComments.filter((comment) => comment.id !== commentId));
-    setCommentCount((currentCount) => Math.max(0, Number(currentCount || 0) - 1));
+    setComments((currentComments) => {
+      const nextComments = currentComments.filter((comment) => comment.id !== commentId && comment.parent_comment_id !== commentId);
+      const removedCount = currentComments.length - nextComments.length;
+
+      setCommentCount((currentCount) => Math.max(0, Number(currentCount || 0) - removedCount));
+      return nextComments;
+    });
     return true;
   }
 
@@ -563,7 +838,7 @@ function PostCard({
     }
   }
 
-  async function handleLikeClick() {
+  async function handleLoveClick() {
     if (!user?.id || loveToggling) {
       return;
     }
@@ -573,14 +848,21 @@ function PostCard({
     const nextLoveCount = Math.max(0, currentLoveCount + (nextLoved ? 1 : -1));
 
     try {
-      const { error, summary } = await togglePostLike(id);
+      const { error, summary } = await setPostReaction(id, "love");
 
       if (error) {
         return;
       }
 
       setHasLoved(Boolean(summary?.user_reaction ?? nextLoved));
-      setCurrentLoveCount(Number(summary?.like_count ?? nextLoveCount));
+      setCurrentLoveCount(Number(summary?.reactions_count ?? summary?.like_count ?? nextLoveCount));
+      if (typeof onReactionUpdated === "function") {
+        onReactionUpdated(id, summary || {
+          like_count: nextLoveCount,
+          reactions_count: nextLoveCount,
+          user_reaction: nextLoved ? "love" : null,
+        });
+      }
 
       if (nextLoved) {
         setLoveAnimating(true);
@@ -733,29 +1015,46 @@ function PostCard({
       ) : null}
 
       <div className="mt-5 flex flex-wrap items-center gap-3 sm:gap-4">
-        <button
-          type="button"
-          onClick={handleLikeClick}
-          disabled={loveToggling}
-          className={`rounded-full px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-70 ${
-            hasLoved
-              ? isDark
-                ? "bg-rose-600 text-white hover:bg-rose-500"
-                : "bg-rose-100 text-rose-700 hover:bg-rose-200"
-              : isDark
-                ? "bg-slate-800 text-white hover:bg-rose-600"
-                : "bg-[#f6e8ff] text-[#c446ff] hover:bg-[#edd4ff]"
-          }`}
-        >
-          <span
-            className={`inline-block transition-transform duration-200 ${
-              loveAnimating ? "scale-150" : "scale-100"
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={handleLoveClick}
+            disabled={loveToggling}
+            aria-label={hasLoved ? "Remove Love" : "Love post"}
+            className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-70 ${
+              hasLoved
+                ? isDark
+                  ? "bg-rose-600 text-white hover:bg-rose-500"
+                  : "bg-rose-100 text-rose-700 hover:bg-rose-200"
+                : isDark
+                  ? "bg-slate-800 text-white hover:bg-rose-600"
+                  : "bg-[#f6e8ff] text-[#c446ff] hover:bg-[#edd4ff]"
             }`}
           >
-            ❤️
-          </span>{" "}
-          {loveToggling ? "..." : "Love"}
-        </button>
+            <span
+              className={`inline-block transition-transform duration-200 ${
+                loveAnimating ? "scale-150" : "scale-100"
+              }`}
+            >
+              {hasLoved ? "❤️" : "🤍"}
+            </span>
+          </button>
+          {canViewLoveList && currentLoveCount ? (
+            <button
+              type="button"
+              onClick={handleLoveCountClick}
+              className={`text-sm font-medium leading-none transition hover:text-[#c446ff] ${
+                isDark ? "text-slate-400" : "text-slate-500"
+              }`}
+            >
+              {currentLoveCount}
+            </button>
+          ) : (
+            <span className={`text-sm leading-none ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+              {currentLoveCount}
+            </span>
+          )}
+        </div>
 
         <button
           onClick={() => setCommentOpen(true)}
@@ -765,24 +1064,8 @@ function PostCard({
               : "bg-[#f6e8ff] text-[#c446ff] hover:bg-[#edd4ff]"
           }`}
         >
-          💬 Comment
+          💬
         </button>
-
-        {canViewLoveList && currentLoveCount ? (
-          <button
-            type="button"
-            onClick={handleLoveCountClick}
-            className={`text-sm font-medium transition hover:text-[#c446ff] ${
-              isDark ? "text-slate-400" : "text-slate-500"
-            }`}
-          >
-            ❤️ {currentLoveCount} {currentLoveCount === 1 ? "Love" : "Loves"}
-          </button>
-        ) : (
-          <span className={`text-sm ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-            ❤️ {currentLoveCount} {currentLoveCount === 1 ? "Love" : "Loves"}
-          </span>
-        )}
 
         <span className={`text-sm ${isDark ? "text-slate-400" : "text-slate-500"}`}>
           {commentCount} Comments
@@ -873,18 +1156,16 @@ function PostCard({
                           >
                             {displayName}
                           </Link>
-                          {love.created_at ? (
-                            <p className={isDark ? "mt-0.5 text-xs text-slate-500" : "mt-0.5 text-xs text-slate-500"}>
-                              {formatRelativeTime(love.created_at)}
-                            </p>
-                          ) : null}
+                          <p className={isDark ? "mt-0.5 text-xs text-slate-500" : "mt-0.5 text-xs text-slate-500"}>
+                            {love.created_at ? formatRelativeTime(love.created_at) : ""}
+                          </p>
                         </div>
                       </div>
                     );
                   })}
                 </div>
               ) : (
-                <p className={isDark ? "text-sm text-slate-400" : "text-sm text-slate-500"}>No loves yet.</p>
+                <p className={isDark ? "text-sm text-slate-400" : "text-sm text-slate-500"}>No reactions yet.</p>
               )}
             </div>
           </div>
@@ -922,16 +1203,30 @@ function PostCard({
               </div>
             </div>
 
-            <div className="min-h-0 overflow-y-auto px-5 py-5">
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
               <CommentList
                 comments={comments}
                 loading={loadingComments}
                 onDeleteComment={handleDeleteComment}
+                onReplyComment={setReplyingToComment}
+                replyingToCommentId={replyingToComment?.id || ""}
+                renderReplyForm={(comment) => (
+                  <CommentForm
+                    onSubmit={(content, isAnonymous) => handleCommentSubmit(content, isAnonymous, comment)}
+                    initialContent={comment.is_anonymous ? "" : `@${comment.profile?.full_name || comment.author_name || ""} `}
+                    placeholder="Write a reply..."
+                    mentionUsers={mentionUsers}
+                    onCancel={() => setReplyingToComment(null)}
+                  />
+                )}
               />
             </div>
 
-            <div className={`shrink-0 border-t px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 ${isDark ? "border-slate-800" : "border-slate-200"}`}>
-              <CommentForm onSubmit={handleCommentSubmit} />
+            <div className={`relative z-10 shrink-0 border-t px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 ${isDark ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-white"}`}>
+              <CommentForm
+                onSubmit={handleCommentSubmit}
+                mentionUsers={mentionUsers}
+              />
             </div>
           </div>
         </div>
