@@ -193,7 +193,7 @@ function IndividualRankingPage() {
           </div>
 
           <div className="hidden overflow-x-auto sm:block">
-            <table className="min-w-[720px] w-full text-left text-sm">
+            <table className="min-w-[640px] w-full text-left text-sm">
               <thead
                 className={`border-b text-xs uppercase tracking-[0.18em] ${
                   isDark ? "border-slate-800 bg-slate-900 text-slate-400" : "border-slate-200 bg-slate-50 text-slate-500"
@@ -201,6 +201,7 @@ function IndividualRankingPage() {
               >
                 <tr>
                   <th className="px-5 py-4 font-semibold">Rank</th>
+                  <th className="px-5 py-4 font-semibold">Avatar</th>
                   <th className="px-5 py-4 font-semibold">Name</th>
                   <th className="px-5 py-4 font-semibold">Rep Score</th>
                 </tr>
@@ -209,7 +210,7 @@ function IndividualRankingPage() {
                 {rankingRows.map((target) => (
                   <tr
                     key={target.id}
-                    className={
+                    className={`${
                       target.isCurrentUser
                         ? isDark
                           ? "bg-sky-950/30 text-slate-100"
@@ -217,22 +218,24 @@ function IndividualRankingPage() {
                         : isDark
                           ? "text-slate-300"
                           : "text-slate-700"
-                    }
+                    } transition hover:bg-[#c446ff]/10`}
                   >
-                    <td className="px-5 py-4 font-semibold">{target.rank}</td>
-                    <td className={`px-5 py-4 font-semibold ${isDark ? "text-slate-100" : "text-slate-950"}`}>
+                    <td className="h-16 px-5 py-3 font-semibold">{target.rank}</td>
+                    <td className="h-16 px-5 py-3">
+                      <Link
+                        to={getProfilePath(target.employeeId, user?.id)}
+                        aria-label={`Open ${target.displayName} profile`}
+                        className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-[#f6e8ff] text-sm font-bold text-[#c446ff] transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[#c446ff]/60"
+                      >
+                        {target.avatarUrl ? (
+                          <img src={target.avatarUrl} alt={target.displayName} className="h-full w-full object-cover" />
+                        ) : (
+                          getInitials(target.displayName, target.email)
+                        )}
+                      </Link>
+                    </td>
+                    <td className={`h-16 px-5 py-3 font-semibold ${isDark ? "text-slate-100" : "text-slate-950"}`}>
                       <div className="flex items-center gap-3">
-                        <Link
-                          to={getProfilePath(target.employeeId, user?.id)}
-                          aria-label={`Open ${target.displayName} profile`}
-                          className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-[#f6e8ff] text-sm font-bold text-[#c446ff] transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[#c446ff]/60"
-                        >
-                          {target.avatarUrl ? (
-                            <img src={target.avatarUrl} alt={target.displayName} className="h-full w-full object-cover" />
-                          ) : (
-                            getInitials(target.displayName, target.email)
-                          )}
-                        </Link>
                         <Link
                           to={getProfilePath(target.employeeId, user?.id)}
                           className={`cursor-pointer transition focus:outline-none focus:ring-2 focus:ring-[#c446ff]/40 ${isDark ? "hover:text-sky-300" : "hover:text-[#c446ff]"}`}
@@ -244,7 +247,7 @@ function IndividualRankingPage() {
                         ) : null}
                       </div>
                     </td>
-                    <td className="px-5 py-4 font-semibold text-[#c446ff]">{formatNumber(target.achievement)}</td>
+                    <td className="h-16 px-5 py-3 font-semibold text-[#c446ff]">{formatNumber(target.achievement)}</td>
                   </tr>
                 ))}
               </tbody>

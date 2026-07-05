@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AvatarGroup } from "../../components/shops/shop_leaderboard_table";
+import { Link } from "react-router-dom";
 import {
   buildSharedShopHistoryRecords,
   deleteShopHistoryEmployees,
@@ -12,7 +12,11 @@ import {
 } from "../../services/shop_service";
 import {
   calculateAchievement,
+  calculateChampionCount,
+  calculateCurrentRank,
 } from "../../services/shop_history_calculation_service";
+import { useAuth } from "../../context/auth_context";
+import { getProfilePath } from "../../utils/profile_path";
 
 const numberFormatter = new Intl.NumberFormat();
 const monthFormatter = new Intl.DateTimeFormat("en", { month: "long", year: "numeric" });
@@ -66,30 +70,14 @@ function formatMonth(month, year) {
   return monthFormatter.format(new Date(Number(year), Number(month) - 1, 1));
 }
 
-function getProgressWidth(achievement) {
-  return `${Math.min(100, Math.max(0, Number(achievement || 0)))}%`;
-}
-
-function getProgressColor(achievement) {
-  if (achievement >= 150) {
-    return "from-amber-300 to-yellow-500";
-  }
-
-  if (achievement >= 100) {
-    return "from-emerald-400 to-emerald-600";
-  }
-
-  if (achievement >= 80) {
-    return "from-sky-400 to-blue-600";
-  }
-
-  return "from-slate-300 to-slate-500";
-}
-
 function getShopName(shops, shopId) {
   const shop = shops.find((item) => item.id === shopId);
 
   return shop?.name || shopId || "Unassigned shop";
+}
+
+function getRecordShopName(record, shops) {
+  return record.shopName || getShopName(shops, record.shopId);
 }
 
 function getEmployeeName(employee) {
@@ -123,7 +111,9 @@ function buildHistoryRecords(sharedRecords = []) {
       id: target.id,
       month: String(target.month),
       reachedSales: String(target.current_sales ?? ""),
+      shop: target.shop || null,
       shopId: target.shop_id,
+      shopName: target.shop?.name || "",
       targetSales: String(target.target_sales ?? ""),
       year: String(target.year),
     };
@@ -131,6 +121,7 @@ function buildHistoryRecords(sharedRecords = []) {
 }
 
 function ShopHistoryPage() {
+  const { user } = useAuth();
   const [records, setRecords] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [shops, setShops] = useState([]);
@@ -144,6 +135,9 @@ function ShopHistoryPage() {
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState([]);
   const [employeePickerOpen, setEmployeePickerOpen] = useState(false);
   const [employeeSearch, setEmployeeSearch] = useState("");
+  const [recordSearch, setRecordSearch] = useState("");
+  const [recordMonthFilter, setRecordMonthFilter] = useState("");
+  const [recordYearFilter, setRecordYearFilter] = useState("");
 
   const isEditing = Boolean(form.recordId);
 
@@ -183,61 +177,90 @@ function ShopHistoryPage() {
   useEffect(() => {
     let isMounted = true;
 
-    async function loadSelectedShopHistory() {
+    async function loadSelectedShopEmployees() {
       if (!form.shopId) {
         setEmployees([]);
-        setRecords([]);
-        setRecordsLoading(false);
-        setRecordsError("");
         return;
       }
 
+      try {
+        const employeeRows = await getShopEmployees(form.shopId);
+
+        if (isMounted) {
+          setEmployees(employeeRows);
+        }
+      } catch (err) {
+        console.error("Shop employees load error:", err);
+
+        if (isMounted) {
+          setEmployees([]);
+          setRecordsError(err?.message || "Unable to load shop employees.");
+        }
+      }
+    }
+
+    loadSelectedShopEmployees();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [form.shopId]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadHistoryRecords() {
       setRecordsLoading(true);
       setRecordsError("");
 
       try {
-        const [employeeRows, historyRows] = await Promise.all([
-          getShopEmployees(form.shopId),
-          getSharedShopHistoryRecords({ month: form.month, shopId: form.shopId, year: form.year }),
-        ]);
+        const historyRows = await getSharedShopHistoryRecords();
 
         if (isMounted) {
-          setEmployees(employeeRows);
           setRecords(buildHistoryRecords(historyRows));
+          setRecordsLoading(false);
         }
       } catch (err) {
         console.error("Shop history load error:", err);
 
         if (isMounted) {
-          setEmployees([]);
           setRecords([]);
           setRecordsError(err?.message || "Unable to load shop history.");
-        }
-      } finally {
-        if (isMounted) {
           setRecordsLoading(false);
         }
       }
     }
 
-    loadSelectedShopHistory();
+    loadHistoryRecords();
 
     return () => {
       isMounted = false;
     };
-  }, [form.month, form.shopId, form.year]);
+  }, []);
 
   const visibleRows = useMemo(() => {
-    if (!form.shopId) {
-      return records;
-    }
+    const normalizedSearch = recordSearch.trim().toLowerCase();
 
-    return records.filter((record) => record.shopId === form.shopId);
-  }, [form.shopId, records]);
-  const selectedShop = useMemo(() => shops.find((shop) => shop.id === form.shopId) || null, [form.shopId, shops]);
-  const emptyHistoryMessage = form.shopId
-    ? `No history found for ${formatMonth(form.month, form.year)}.`
-    : "Select a shop to view history.";
+    return [...records]
+      .filter((record) => {
+        const shopName = getRecordShopName(record, shops).toLowerCase();
+        const matchesSearch = !normalizedSearch || shopName.includes(normalizedSearch);
+        const matchesMonth = !recordMonthFilter || record.month === recordMonthFilter;
+        const matchesYear = !recordYearFilter || record.year === recordYearFilter;
+
+        return matchesSearch && matchesMonth && matchesYear;
+      })
+      .sort((first, second) => {
+        if (Number(second.year) !== Number(first.year)) {
+          return Number(second.year) - Number(first.year);
+        }
+
+        return Number(second.month) - Number(first.month);
+      });
+  }, [recordMonthFilter, recordSearch, recordYearFilter, records, shops]);
+  const recordYearOptions = useMemo(() => {
+    return [...new Set(records.map((record) => record.year).filter(Boolean))].sort((left, right) => Number(right) - Number(left));
+  }, [records]);
   const selectedEmployees = useMemo(
     () => selectedEmployeeIds
       .map((employeeId) => employees.find((employee) => employee.id === employeeId))
@@ -404,6 +427,10 @@ function ShopHistoryPage() {
     const record = records.find((item) => item.id === recordId);
 
     if (!record) {
+      return;
+    }
+
+    if (!window.confirm("Delete this history record?")) {
       return;
     }
 
@@ -608,8 +635,44 @@ function ShopHistoryPage() {
       </form>
 
       <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
-        <div className="border-b border-slate-200 px-5 py-4">
-          <h3 className="text-xl font-semibold text-slate-950">History Records</h3>
+        <div className="flex flex-col gap-4 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h3 className="text-xl font-semibold text-slate-950">History Records</h3>
+            <p className="mt-1 text-sm text-slate-500">Manage saved monthly shop history records.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3 lg:w-[620px]">
+            <input
+              type="search"
+              value={recordSearch}
+              onChange={(event) => setRecordSearch(event.target.value)}
+              placeholder="Search shop"
+              className="h-10 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-950 outline-none transition focus:border-[#c446ff] focus:bg-white"
+            />
+            <select
+              value={recordMonthFilter}
+              onChange={(event) => setRecordMonthFilter(event.target.value)}
+              className="h-10 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-950 outline-none transition focus:border-[#c446ff] focus:bg-white"
+            >
+              <option value="">All months</option>
+              {monthOptions.map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={recordYearFilter}
+              onChange={(event) => setRecordYearFilter(event.target.value)}
+              className="h-10 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-950 outline-none transition focus:border-[#c446ff] focus:bg-white"
+            >
+              <option value="">All years</option>
+              {recordYearOptions.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         <div className="mt-5 space-y-3">
           {recordsError ? (
@@ -625,55 +688,131 @@ function ShopHistoryPage() {
           ) : null}
 
           {!recordsLoading && visibleRows.length ? (
-            visibleRows.map((record) => {
-              const achievement = calculateAchievement(record.targetSales, record.reachedSales);
-              const recordEmployees = getRecordEmployees(record, employees);
+            <>
+              <div className="hidden overflow-x-auto lg:block">
+                <table className="w-full min-w-[980px] border-separate border-spacing-y-3 text-left text-sm">
+                  <thead className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold">Month</th>
+                      <th className="px-4 py-3 font-semibold">Shop</th>
+                      <th className="px-4 py-3 font-semibold">Achievement %</th>
+                      <th className="px-4 py-3 font-semibold">Current Rank</th>
+                      <th className="px-4 py-3 font-semibold">Champion Count</th>
+                      <th className="px-4 py-3 font-semibold">Employees</th>
+                      <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleRows.map((record) => {
+                      const achievement = calculateAchievement(record.targetSales, record.reachedSales);
+                      const periodRecords = records.filter((item) => item.month === record.month && item.year === record.year);
+                      const currentRank = calculateCurrentRank(record.shopId, periodRecords);
+                      const championCount = calculateChampionCount(record.shopId, records);
+                      const recordEmployees = getRecordEmployees(record, employees);
 
-              return (
-                <article key={record.id} className="rounded-[28px] border border-slate-200 bg-slate-50 p-5 shadow-sm">
-                  <h4 className="truncate text-xl font-bold text-slate-950">🏪 {getShopName(shops, record.shopId)}</h4>
-                  <div className="mt-4">
-                    <p className="mb-2 text-xs font-semibold text-slate-500">👤 Employee Avatars</p>
-                    <AvatarGroup employees={recordEmployees} isDark={false} size="sm" />
-                  </div>
-                  <div className="mt-4">
-                    <p className="text-xs font-semibold text-slate-500">📅 Month</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-800">{formatMonth(record.month, record.year)}</p>
-                  </div>
-                  <div className="mt-4">
-                    <p className="text-xs font-semibold text-slate-500">Progress</p>
-                    <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-200">
-                      <div
-                        className={`h-full rounded-full bg-gradient-to-r ${getProgressColor(achievement)}`}
-                        style={{ width: getProgressWidth(achievement) }}
-                      />
-                    </div>
-                    <p className="mt-3 text-center text-3xl font-black leading-none text-slate-950">{formatNumber(achievement)}%</p>
-                  </div>
-                  <div className="mt-4 flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleEdit(record)}
-                      className="h-10 flex-1 rounded-2xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(record.id)}
-                      className="h-10 flex-1 rounded-2xl border border-rose-200 bg-white px-3 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </article>
-              );
-            })
+                      return (
+                        <tr key={record.id} className="bg-slate-50 text-slate-700 transition hover:-translate-y-0.5 hover:bg-[#fdf7ff]">
+                          <td className="rounded-l-2xl px-4 py-4 font-semibold text-slate-900">{formatMonth(record.month, record.year)}</td>
+                          <td className="px-4 py-4 font-semibold text-slate-900">{getRecordShopName(record, shops)}</td>
+                          <td className="px-4 py-4 font-bold text-[#c446ff]">{formatNumber(achievement)}%</td>
+                          <td className="px-4 py-4 font-semibold">{currentRank ? `#${currentRank}` : "--"}</td>
+                          <td className="px-4 py-4 font-semibold">{formatNumber(championCount)}x</td>
+                          <td className="px-4 py-4">
+                            <HistoryEmployeeAvatars employees={recordEmployees} userId={user?.id} />
+                          </td>
+                          <td className="rounded-r-2xl px-4 py-4">
+                            <div className="flex justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleEdit(record)}
+                                className="h-9 rounded-2xl border border-slate-200 bg-white px-4 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(record.id)}
+                                className="h-9 rounded-2xl border border-rose-200 bg-white px-4 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="grid gap-3 lg:hidden">
+                {visibleRows.map((record) => {
+                  const achievement = calculateAchievement(record.targetSales, record.reachedSales);
+                  const periodRecords = records.filter((item) => item.month === record.month && item.year === record.year);
+                  const currentRank = calculateCurrentRank(record.shopId, periodRecords);
+                  const championCount = calculateChampionCount(record.shopId, records);
+                  const recordEmployees = getRecordEmployees(record, employees);
+
+                  return (
+                    <article key={record.id} className="rounded-[24px] border border-slate-200 bg-slate-50 p-4 shadow-sm">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-slate-500">{formatMonth(record.month, record.year)}</p>
+                          <h4 className="mt-1 truncate text-lg font-bold text-slate-950">{getRecordShopName(record, shops)}</h4>
+                        </div>
+                        <p className="shrink-0 rounded-full bg-[#f6e8ff] px-3 py-1 text-xs font-bold text-[#c446ff]">
+                          {formatNumber(achievement)}%
+                        </p>
+                      </div>
+
+                      <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                        <div className="rounded-2xl bg-white p-3">
+                          <dt className="text-xs font-semibold text-slate-500">Current Rank</dt>
+                          <dd className="mt-1 font-bold text-slate-900">{currentRank ? `#${currentRank}` : "--"}</dd>
+                        </div>
+                        <div className="rounded-2xl bg-white p-3">
+                          <dt className="text-xs font-semibold text-slate-500">Champion Count</dt>
+                          <dd className="mt-1 font-bold text-slate-900">{formatNumber(championCount)}x</dd>
+                        </div>
+                      </dl>
+
+                      <div className="mt-4">
+                        <p className="mb-2 text-xs font-semibold text-slate-500">Employees</p>
+                        <HistoryEmployeeAvatars employees={recordEmployees} userId={user?.id} />
+                      </div>
+
+                      <div className="mt-4 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleEdit(record)}
+                          className="h-10 flex-1 rounded-2xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(record.id)}
+                          className="h-10 flex-1 rounded-2xl border border-rose-200 bg-white px-3 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </>
           ) : null}
 
           {!recordsLoading && !visibleRows.length ? (
-            <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-5 py-8 text-center text-sm text-slate-500">
-              {selectedShop ? `${emptyHistoryMessage}` : emptyHistoryMessage}
+            <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
+              <p className="text-4xl" aria-hidden="true">📊</p>
+              <h4 className="mt-3 text-lg font-bold text-slate-950">
+                {records.length ? "No matching history records." : "No history records yet."}
+              </h4>
+              <p className="mt-1 text-sm text-slate-500">
+                {records.length ? "Adjust your search or filters." : "Create your first monthly history above."}
+              </p>
             </div>
           ) : null}
         </div>
@@ -690,6 +829,39 @@ function EmployeeAvatar({ employee }) {
     <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-[#f6e8ff] text-xs font-bold text-[#c446ff] shadow-sm">
       {avatarUrl ? <img src={avatarUrl} alt={employeeName} className="h-full w-full object-cover" /> : getInitials(employeeName)}
     </span>
+  );
+}
+
+function HistoryEmployeeAvatars({ employees = [], userId }) {
+  const visibleEmployees = employees.slice(0, 6);
+  const hiddenCount = Math.max(0, employees.length - visibleEmployees.length);
+
+  return (
+    <div className="flex min-h-9 items-center">
+      <div className="flex -space-x-2">
+        {visibleEmployees.map((employee) => {
+          const employeeName = getEmployeeName(employee);
+          const avatarUrl = employee?.avatar_url || employee?.avatarUrl;
+
+          return (
+            <Link
+              key={employee.id}
+              to={getProfilePath(employee.id, userId)}
+              aria-label={`Open ${employeeName} profile`}
+              title={employeeName}
+              className="relative flex h-9 w-9 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-white bg-[#f6e8ff] text-xs font-bold text-[#c446ff] shadow-sm transition hover:z-10 hover:-translate-y-0.5 focus:z-10 focus:outline-none focus:ring-2 focus:ring-[#c446ff]/60"
+            >
+              {avatarUrl ? <img src={avatarUrl} alt={employeeName} className="h-full w-full object-cover" /> : getInitials(employeeName)}
+            </Link>
+          );
+        })}
+      </div>
+      {hiddenCount ? (
+        <span className="ml-2 flex h-9 min-w-9 items-center justify-center rounded-full bg-slate-200 px-2 text-xs font-bold text-slate-700">
+          +{hiddenCount}
+        </span>
+      ) : null}
+    </div>
   );
 }
 
