@@ -1,0 +1,9 @@
+{
+  "appId": "com.gemify.app",
+  "appName": "Gemify",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  }
+}
