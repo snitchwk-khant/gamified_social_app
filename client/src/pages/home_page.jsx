@@ -4,6 +4,8 @@ import { useAuth } from "../context/auth_context";
 import * as postService from "../services/post_service";
 import * as storiesService from "../services/stories_service";
 import { getActiveAnnouncements } from "../services/announcement_service";
+import { errorNotification, mediumImpact } from "../services/haptics";
+import NetworkService from "../services/network_service";
 import FeedWidget from "../components/center_feed/feed_widget";
 import StoryViewer from "../components/story/story_viewer";
 import { useTheme } from "../context/theme_context";
@@ -370,25 +372,31 @@ function HomePage() {
     setStoriesError("");
 
     try {
-      const { data: uploadData, error: uploadError } = await storiesService.uploadStoryImage(file);
+      const { data: uploadData, error: uploadError } = await NetworkService.enqueue(() =>
+        storiesService.uploadStoryImage(file)
+      );
 
       if (uploadError || !uploadData?.publicUrl) {
         throw uploadError || new Error("Unable to upload story image.");
       }
 
-      const { error: createError } = await storiesService.createStory({
-        image_url: uploadData.publicUrl,
-        media_type: uploadData.mediaType || "image",
-        story_type: uploadData.mediaType || "image",
-      });
+      const { error: createError } = await NetworkService.enqueue(() =>
+        storiesService.createStory({
+          image_url: uploadData.publicUrl,
+          media_type: uploadData.mediaType || "image",
+          story_type: uploadData.mediaType || "image",
+        })
+      );
 
       if (createError) {
         throw createError;
       }
 
       setStoryComposerOpen(false);
+      mediumImpact();
     } catch (err) {
       console.error("Create Story Error:", err);
+      errorNotification();
       setStoriesError(err?.message || "Unable to save story.");
     } finally {
       input.value = "";
@@ -413,11 +421,13 @@ function HomePage() {
     setStoriesError("");
 
     try {
-      const { error } = await storiesService.createStory({
-        story_type: "text",
-        background_color: storyBackground,
-        content: trimmedText,
-      });
+      const { error } = await NetworkService.enqueue(() =>
+        storiesService.createStory({
+          story_type: "text",
+          background_color: storyBackground,
+          content: trimmedText,
+        })
+      );
 
       if (error) {
         throw error;
@@ -426,8 +436,10 @@ function HomePage() {
       setStoryText("");
       setStoryBackground("purple");
       setStoryComposerOpen(false);
+      mediumImpact();
     } catch (err) {
       console.error("Create Text Story Error:", err);
+      errorNotification();
       setStoriesError(err?.message || "Unable to save story.");
     } finally {
       setStoryUploading(false);
@@ -474,11 +486,13 @@ function HomePage() {
       return { success: false, error: "Write something or add media to publish." };
     }
 
-    const { error } = await postService.createPost({
-      content: trimmedContent,
-      imageFile,
-      isAnonymous,
-    });
+    const { error } = await NetworkService.enqueue(() =>
+      postService.createPost({
+        content: trimmedContent,
+        imageFile,
+        isAnonymous,
+      })
+    );
 
     if (error) {
       console.error("Publish Post Error:", {
@@ -488,11 +502,13 @@ function HomePage() {
         hint: error.hint,
         error,
       });
+      errorNotification();
       return { success: false, error: error?.message || "Unable to publish post." };
     }
 
     setDraft("");
     await loadPosts();
+    mediumImpact();
     return { success: true };
   };
 

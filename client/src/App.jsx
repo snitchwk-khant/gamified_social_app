@@ -19,6 +19,10 @@ import ShopsPage from "./pages/shops_page";
 import ShopProfilePage from "./pages/shop_profile_page";
 import SplashScreen from "./pages/SplashScreen";
 import SafeAreaLayout from "./components/layout/SafeAreaLayout";
+import NetworkBanner from "./components/network/NetworkBanner";
+import OfflineScreen from "./components/network/OfflineScreen";
+import useNetwork from "./hooks/useNetwork";
+import useDeepLink from "./hooks/useDeepLink";
 import { getProfile } from "./services/profile_service";
 
 function RequireAuth({ children }) {
@@ -232,67 +236,93 @@ function RequireAdmin({ children }) {
   return children;
 }
 
+function NetworkShell({ children }) {
+  const { initialized, connected, launchedOffline } = useNetwork();
+  const [offlineLaunchRecovered, setOfflineLaunchRecovered] = useState(false);
+  const showOfflineScreen = initialized && launchedOffline && !connected && !offlineLaunchRecovered;
+
+  if (showOfflineScreen) {
+    return <OfflineScreen onRecovered={() => setOfflineLaunchRecovered(true)} />;
+  }
+
+  return (
+    <>
+      {children}
+      <NetworkBanner />
+    </>
+  );
+}
+
+function DeepLinkBridge() {
+  useDeepLink();
+
+  return null;
+}
+
 function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
         <SocketProvider>
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<SplashScreen />} />
-              <Route path="/login" element={<LoginPage />} />
-              <Route
-                path="/change-password"
-                element={
-                  <RequireAuth>
-                    <RequirePasswordChangeOnly>
-                      <ChangePasswordPage />
-                    </RequirePasswordChangeOnly>
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/admin"
-                element={
-                  <RequireAuth>
-                    <RequirePasswordChange>
-                      <RequireAdmin>
-                        <AdminLayout />
-                      </RequireAdmin>
-                    </RequirePasswordChange>
-                  </RequireAuth>
-                }
-              >
-                <Route index element={createAdminRouteElement(adminRoutes[0])} />
-                {adminRoutes.map((route) => (
-                  <Route key={route.path} path={route.path} element={createAdminRouteElement(route)} />
-                ))}
-                <Route path="*" element={<Navigate to="/admin" replace />} />
-              </Route>
-              <Route
-                element={
-                  <RequireAuth>
-                    <RequirePasswordChange>
-                      <MainLayout />
-                    </RequirePasswordChange>
-                  </RequireAuth>
-                }
-              >
-                <Route path="/home" element={<HomePage />} />
-                <Route path="/notifications" element={<NotificationsPage />} />
-                <Route path="/anonymous-mailbox" element={<AnonymousMailboxPage />} />
-                <Route path="/leaderboard" element={<LeaderboardPage />} />
-                <Route path="/monthly-champions" element={<MonthlyChampionsPage />} />
-                <Route path="/individual-ranking" element={<IndividualRankingPage />} />
-                <Route path="/shops" element={<ShopsPage />} />
-                <Route path="/shops/:shopId" element={<ShopProfilePage />} />
-                <Route path="/profile" element={<ProfilePage />} />
-                <Route path="/profile/:userId" element={<ProfilePage />} />
-                <Route path="/shop/:id" element={<ShopProfilePage />} />
-                <Route path="*" element={<Navigate to="/home" replace />} />
-              </Route>
-            </Routes>
-          </BrowserRouter>
+          <NetworkShell>
+            <BrowserRouter>
+              <DeepLinkBridge />
+              <Routes>
+                <Route path="/" element={<SplashScreen />} />
+                <Route path="/login" element={<LoginPage />} />
+                <Route
+                  path="/change-password"
+                  element={
+                    <RequireAuth>
+                      <RequirePasswordChangeOnly>
+                        <ChangePasswordPage />
+                      </RequirePasswordChangeOnly>
+                    </RequireAuth>
+                  }
+                />
+                <Route
+                  path="/admin"
+                  element={
+                    <RequireAuth>
+                      <RequirePasswordChange>
+                        <RequireAdmin>
+                          <AdminLayout />
+                        </RequireAdmin>
+                      </RequirePasswordChange>
+                    </RequireAuth>
+                  }
+                >
+                  <Route index element={createAdminRouteElement(adminRoutes[0])} />
+                  {adminRoutes.map((route) => (
+                    <Route key={route.path} path={route.path} element={createAdminRouteElement(route)} />
+                  ))}
+                  <Route path="*" element={<Navigate to="/admin" replace />} />
+                </Route>
+                <Route
+                  element={
+                    <RequireAuth>
+                      <RequirePasswordChange>
+                        <MainLayout />
+                      </RequirePasswordChange>
+                    </RequireAuth>
+                  }
+                >
+                  <Route path="/home" element={<HomePage />} />
+                  <Route path="/notifications" element={<NotificationsPage />} />
+                  <Route path="/anonymous-mailbox" element={<AnonymousMailboxPage />} />
+                  <Route path="/leaderboard" element={<LeaderboardPage />} />
+                  <Route path="/monthly-champions" element={<MonthlyChampionsPage />} />
+                  <Route path="/individual-ranking" element={<IndividualRankingPage />} />
+                  <Route path="/shops" element={<ShopsPage />} />
+                  <Route path="/shops/:shopId" element={<ShopProfilePage />} />
+                  <Route path="/profile" element={<ProfilePage />} />
+                  <Route path="/profile/:userId" element={<ProfilePage />} />
+                  <Route path="/shop/:id" element={<ShopProfilePage />} />
+                  <Route path="*" element={<Navigate to="/home" replace />} />
+                </Route>
+              </Routes>
+            </BrowserRouter>
+          </NetworkShell>
         </SocketProvider>
       </AuthProvider>
     </ThemeProvider>

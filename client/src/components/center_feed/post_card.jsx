@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../context/auth_context";
 import { useTheme } from "../../context/theme_context";
 import { supabase } from "../../lib/supabase";
+import { errorNotification, lightImpact, mediumImpact } from "../../services/haptics";
+import NetworkService from "../../services/network_service";
 import {
   getPostLoves,
   getPostReactionSummary,
@@ -756,11 +758,13 @@ function PostCard({
       parent_comment_id: resolvedParentCommentId,
     };
 
-    const { data, error } = await supabase
-      .from("comments")
-      .insert(insertPayload)
-      .select("id, content, created_at, is_anonymous, user_id, parent_comment_id")
-      .single();
+    const { data, error } = await NetworkService.enqueue(() =>
+      supabase
+        .from("comments")
+        .insert(insertPayload)
+        .select("id, content, created_at, is_anonymous, user_id, parent_comment_id")
+        .single()
+    );
 
     if (error) {
       console.error("Comment Insert Error:", {
@@ -770,9 +774,11 @@ function PostCard({
         hint: error.hint,
         error,
       });
+      errorNotification();
       return false;
     }
 
+    mediumImpact();
     const [formattedComment] = await formatCommentRows([data]);
     upsertComment(formattedComment);
     setReplyingToComment(null);
@@ -853,12 +859,14 @@ function PostCard({
     const nextLoveCount = Math.max(0, currentLoveCount + (nextLoved ? 1 : -1));
 
     try {
-      const { error, summary } = await setPostReaction(id, "love");
+      const { error, summary } = await NetworkService.enqueue(() => setPostReaction(id, "love"));
 
       if (error) {
+        errorNotification();
         return;
       }
 
+      lightImpact();
       setHasLoved(Boolean(summary?.user_reaction ?? nextLoved));
       setCurrentLoveCount(Number(summary?.reactions_count ?? summary?.like_count ?? nextLoveCount));
       if (typeof onReactionUpdated === "function") {

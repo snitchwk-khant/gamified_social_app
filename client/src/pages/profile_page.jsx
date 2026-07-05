@@ -20,6 +20,8 @@ import { getSalesTargets } from "../services/sales_target_service";
 import { buildLeaderboard } from "../services/leaderboard_service";
 import { getLeaderboardDisplayPeriod } from "../services/leaderboard_settings_service";
 import { getPosts } from "../services/post_service";
+import { errorNotification, mediumImpact } from "../services/haptics";
+import NetworkService from "../services/network_service";
 
 const EMPTY_FORM = {
   full_name: "",
@@ -368,7 +370,7 @@ function ProfilePage() {
         return;
       }
 
-      const savedProfile = await saveProfile(user.id, buildProfileUpdates());
+      const savedProfile = await NetworkService.enqueue(() => saveProfile(user.id, buildProfileUpdates()));
       const nextStats = await getProfileStats(user.id);
 
       setProfile(savedProfile);
@@ -376,8 +378,10 @@ function ProfilePage() {
       setEditing(false);
       await refreshUserProfile(savedProfile);
       setSuccess("Profile saved successfully.");
+      mediumImpact();
     } catch (err) {
       console.error("Profile Save Error:", err);
+      errorNotification();
       setError("Unable to save profile. Please try again.");
     } finally {
       setSaving(false);
@@ -405,13 +409,17 @@ function ProfilePage() {
     setSuccess(null);
 
     try {
-      const savedProfile = await updateProfileAvatar(user.id, file, profile?.avatar_url || "");
+      const savedProfile = await NetworkService.enqueue(() =>
+        updateProfileAvatar(user.id, file, profile?.avatar_url || "")
+      );
 
       setProfile(savedProfile);
       await refreshUserProfile(savedProfile);
       setSuccess("Profile picture updated.");
+      mediumImpact();
     } catch (err) {
       console.error("Profile Avatar Upload Error:", err);
+      errorNotification();
       setError(err?.message || "Unable to update profile picture. Please try again.");
     } finally {
       input.value = "";
@@ -454,11 +462,11 @@ function ProfilePage() {
         let albumImage = null;
 
         if (albumImages.length >= 6) {
-          await deleteProfileAlbumImage(replacingAlbumImage);
-          albumImage = await uploadProfileAlbumImage(user.id, file);
+          await NetworkService.enqueue(() => deleteProfileAlbumImage(replacingAlbumImage));
+          albumImage = await NetworkService.enqueue(() => uploadProfileAlbumImage(user.id, file));
         } else {
-          albumImage = await uploadProfileAlbumImage(user.id, file);
-          await deleteProfileAlbumImage(replacingAlbumImage);
+          albumImage = await NetworkService.enqueue(() => uploadProfileAlbumImage(user.id, file));
+          await NetworkService.enqueue(() => deleteProfileAlbumImage(replacingAlbumImage));
         }
 
         if (albumImage) {
@@ -470,18 +478,21 @@ function ProfilePage() {
         }
 
         setSuccess("Photo updated in Profile Gallery.");
+        mediumImpact();
         return;
       }
 
-      const albumImage = await uploadProfileAlbumImage(user.id, file);
+      const albumImage = await NetworkService.enqueue(() => uploadProfileAlbumImage(user.id, file));
 
       if (albumImage) {
         setAlbumImages((current) => [...current, albumImage].slice(0, 6));
       }
 
       setSuccess("Photo added to Profile Album.");
+      mediumImpact();
     } catch (err) {
       console.error("Profile Album Upload Error:", err);
+      errorNotification();
       setError(err?.message === "Maximum 6 profile photos allowed." ? err.message : "Unable to add photo. Please try again.");
     } finally {
       input.value = "";

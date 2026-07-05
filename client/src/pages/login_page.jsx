@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import SafeAreaLayout from "../components/layout/SafeAreaLayout";
 import { useAuth } from "../context/auth_context";
+import { errorNotification } from "../services/haptics";
 
 function LoginPage() {
   const [email, setEmail] = useState("");
@@ -21,6 +22,7 @@ function LoginPage() {
       window.sessionStorage.setItem("gemify-show-welcome-leaderboard", nextUser?.id || "true");
       navigate(nextUser?.must_change_password ? "/change-password" : "/home", { replace: true });
     } catch {
+      errorNotification();
       setError("Invalid email or password");
     } finally {
       setLoading(false);
