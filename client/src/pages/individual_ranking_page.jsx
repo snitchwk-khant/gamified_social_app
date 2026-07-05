@@ -34,18 +34,6 @@ function getInitials(name, email) {
   );
 }
 
-function getAchievementClass(achievement, isDark) {
-  if (achievement >= 100) {
-    return isDark ? "bg-emerald-950 text-emerald-200" : "bg-emerald-50 text-emerald-700";
-  }
-
-  if (achievement >= 80) {
-    return isDark ? "bg-amber-950 text-amber-200" : "bg-amber-50 text-amber-700";
-  }
-
-  return isDark ? "bg-rose-950 text-rose-200" : "bg-rose-50 text-rose-700";
-}
-
 function IndividualRankingPage() {
   const { user } = useAuth();
   const { isDark } = useTheme();
@@ -97,7 +85,7 @@ function IndividualRankingPage() {
       >
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold">Individual Ranking</h1>
+            <h1 className="text-2xl font-semibold">Soft Skill Ranking</h1>
             <p className={isDark ? "mt-1 text-sm text-slate-400" : "mt-1 text-sm text-slate-500"}>
               Employee ranking by individual sales target achievement
             </p>
@@ -194,12 +182,10 @@ function IndividualRankingPage() {
                         <span className="shrink-0 rounded-full bg-[#c446ff] px-2 py-0.5 text-[11px] font-semibold text-white">You</span>
                       ) : null}
                     </div>
-                    <p className={`mt-1 text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                      {formatNumber(target.current_sales)} / {formatNumber(target.target_sales)}
-                    </p>
+                    <p className={`mt-1 text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>Rep Score</p>
                   </div>
-                  <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${getAchievementClass(target.achievement, isDark)}`}>
-                    {formatNumber(target.achievement)}%
+                  <span className="shrink-0 rounded-full bg-[#c446ff] px-3 py-1 text-xs font-semibold text-white">
+                    {formatNumber(target.achievement)}
                   </span>
                 </div>
               </article>
@@ -215,11 +201,8 @@ function IndividualRankingPage() {
               >
                 <tr>
                   <th className="px-5 py-4 font-semibold">Rank</th>
-                  <th className="px-5 py-4 font-semibold">Avatar</th>
-                  <th className="px-5 py-4 font-semibold">Employee Name</th>
-                  <th className="px-5 py-4 font-semibold">Current Sales</th>
-                  <th className="px-5 py-4 font-semibold">Target Sales</th>
-                  <th className="px-5 py-4 font-semibold">Achievement %</th>
+                  <th className="px-5 py-4 font-semibold">Name</th>
+                  <th className="px-5 py-4 font-semibold">Rep Score</th>
                 </tr>
               </thead>
               <tbody className={isDark ? "divide-y divide-slate-800" : "divide-y divide-slate-100"}>
@@ -237,21 +220,19 @@ function IndividualRankingPage() {
                     }
                   >
                     <td className="px-5 py-4 font-semibold">{target.rank}</td>
-                    <td className="px-5 py-4">
-                      <Link
-                        to={getProfilePath(target.employeeId, user?.id)}
-                        aria-label={`Open ${target.displayName} profile`}
-                        className="flex h-11 w-11 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-[#f6e8ff] text-sm font-bold text-[#c446ff] transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[#c446ff]/60"
-                      >
-                        {target.avatarUrl ? (
-                          <img src={target.avatarUrl} alt={target.displayName} className="h-full w-full object-cover" />
-                        ) : (
-                          getInitials(target.displayName, target.email)
-                        )}
-                      </Link>
-                    </td>
                     <td className={`px-5 py-4 font-semibold ${isDark ? "text-slate-100" : "text-slate-950"}`}>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-3">
+                        <Link
+                          to={getProfilePath(target.employeeId, user?.id)}
+                          aria-label={`Open ${target.displayName} profile`}
+                          className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-[#f6e8ff] text-sm font-bold text-[#c446ff] transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[#c446ff]/60"
+                        >
+                          {target.avatarUrl ? (
+                            <img src={target.avatarUrl} alt={target.displayName} className="h-full w-full object-cover" />
+                          ) : (
+                            getInitials(target.displayName, target.email)
+                          )}
+                        </Link>
                         <Link
                           to={getProfilePath(target.employeeId, user?.id)}
                           className={`cursor-pointer transition focus:outline-none focus:ring-2 focus:ring-[#c446ff]/40 ${isDark ? "hover:text-sky-300" : "hover:text-[#c446ff]"}`}
@@ -263,13 +244,7 @@ function IndividualRankingPage() {
                         ) : null}
                       </div>
                     </td>
-                    <td className="px-5 py-4">{formatNumber(target.current_sales)}</td>
-                    <td className="px-5 py-4">{formatNumber(target.target_sales)}</td>
-                    <td className="px-5 py-4">
-                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getAchievementClass(target.achievement, isDark)}`}>
-                        {formatNumber(target.achievement)}%
-                      </span>
-                    </td>
+                    <td className="px-5 py-4 font-semibold text-[#c446ff]">{formatNumber(target.achievement)}</td>
                   </tr>
                 ))}
               </tbody>

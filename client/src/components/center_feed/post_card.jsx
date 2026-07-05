@@ -737,18 +737,23 @@ function PostCard({
     );
   }
 
-  async function handleCommentSubmit(content, isAnonymous = false, parentComment = null) {
+  async function handleCommentSubmit(content, isAnonymous = false, parentCommentId = null) {
     if (!user?.id) return false;
 
     const trimmedContent = content?.trim();
     if (!trimmedContent) return false;
+
+    const resolvedParentCommentId = parentCommentId || null;
+    const parentComment = resolvedParentCommentId
+      ? comments.find((comment) => comment.id === resolvedParentCommentId) || null
+      : null;
 
     const insertPayload = {
       post_id: id,
       user_id: user.id,
       content: trimmedContent,
       is_anonymous: isAnonymous,
-      parent_comment_id: parentComment?.id || null,
+      parent_comment_id: resolvedParentCommentId,
     };
 
     const { data, error } = await supabase
@@ -1212,7 +1217,7 @@ function PostCard({
                 replyingToCommentId={replyingToComment?.id || ""}
                 renderReplyForm={(comment) => (
                   <CommentForm
-                    onSubmit={(content, isAnonymous) => handleCommentSubmit(content, isAnonymous, comment)}
+                    onSubmit={(content, isAnonymous) => handleCommentSubmit(content, isAnonymous, comment.id)}
                     initialContent={comment.is_anonymous ? "" : `@${comment.profile?.full_name || comment.author_name || ""} `}
                     placeholder="Write a reply..."
                     mentionUsers={mentionUsers}
@@ -1224,7 +1229,7 @@ function PostCard({
 
             <div className={`relative z-10 shrink-0 border-t px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 ${isDark ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-white"}`}>
               <CommentForm
-                onSubmit={handleCommentSubmit}
+                onSubmit={(content, isAnonymous) => handleCommentSubmit(content, isAnonymous, null)}
                 mentionUsers={mentionUsers}
               />
             </div>

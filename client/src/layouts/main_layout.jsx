@@ -207,29 +207,29 @@ function MainLayout() {
       />
 
       {showHighlights ? (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/60 p-2 backdrop-blur-sm">
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="welcome-leaderboard-title"
-            className={`max-h-[75vh] w-[90vw] max-w-[380px] animate-[welcome-leaderboard-in_180ms_ease-out] overflow-hidden rounded-[20px] border p-4 shadow-2xl sm:max-w-md ${
+            className={`max-h-[70vh] w-[78vw] max-w-[320px] animate-[welcome-leaderboard-in_180ms_ease-out] overflow-hidden rounded-2xl border p-3 shadow-2xl sm:max-w-[340px] ${
               isDark ? "border-slate-800 bg-slate-900 text-slate-100" : "border-slate-200 bg-white text-slate-950"
             }`}
           >
             <div className="text-center">
-              <h2 id="welcome-leaderboard-title" className="text-xl font-bold">
+              <h2 id="welcome-leaderboard-title" className="text-lg font-bold leading-tight">
                 🏆 Welcome Back
               </h2>
-              <p className="mt-1 text-sm font-semibold text-[#c446ff]">{formatPeriodLabel(leaderboardPeriod)}</p>
+              <p className="mt-0.5 text-xs font-semibold text-[#c446ff]">{formatPeriodLabel(leaderboardPeriod)}</p>
             </div>
 
-            <div className="mt-4 space-y-2">
-              <p className={`text-[11px] font-semibold uppercase tracking-[0.16em] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+            <div className="mt-3 space-y-1.5">
+              <p className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
                 Top 5 Shops
               </p>
 
               {leaderboardLoading ? (
-                <div className={`rounded-2xl border px-3 py-5 text-center text-sm ${isDark ? "border-slate-800 bg-slate-950 text-slate-400" : "border-slate-200 bg-slate-50 text-slate-500"}`}>
+                <div className={`rounded-xl border px-2.5 py-4 text-center text-xs ${isDark ? "border-slate-800 bg-slate-950 text-slate-400" : "border-slate-200 bg-slate-50 text-slate-500"}`}>
                   Loading leaderboard...
                 </div>
               ) : null}
@@ -252,12 +252,12 @@ function MainLayout() {
                           navigate(getShopPath(row.shop_id));
                         }
                       }}
-                      className={`border-b py-2.5 transition last:border-b-0 ${
+                      className={`border-b py-1.5 transition last:border-b-0 ${
                         row.shop_id ? "cursor-pointer hover:-translate-y-0.5" : ""
                       } ${isDark ? "border-slate-800" : "border-slate-100"}`}
                     >
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 shrink-0 text-xl leading-none">{formatRank(row.rank)}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 shrink-0 text-lg leading-none">{formatRank(row.rank)}</div>
                         <div className="min-w-0 flex-1">
                           {row.shop_id ? (
                             <a
@@ -267,20 +267,20 @@ function MainLayout() {
                                 setShowHighlights(false);
                                 navigate(getShopPath(row.shop_id));
                               }}
-                              className={`block truncate text-sm font-semibold transition hover:text-[#c446ff] ${
+                              className={`block truncate text-[13px] font-semibold transition hover:text-[#c446ff] ${
                                 isDark ? "text-slate-100" : "text-slate-950"
                               }`}
                             >
                               {row.shopName}
                             </a>
                           ) : (
-                            <p className={`truncate text-sm font-semibold ${isDark ? "text-slate-100" : "text-slate-950"}`}>
+                            <p className={`truncate text-[13px] font-semibold ${isDark ? "text-slate-100" : "text-slate-950"}`}>
                               {row.shopName}
                             </p>
                           )}
                         </div>
                         <div
-                          className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                          className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                             row.achievement >= 100
                               ? isDark
                                 ? "bg-emerald-950 text-emerald-200"
@@ -297,7 +297,7 @@ function MainLayout() {
                           {formatAchievement(row.achievement)}
                         </div>
                       </div>
-                      <div className="mt-1.5 pl-10">
+                      <div className="mt-0.5 h-7 origin-left scale-[0.88] pl-9">
                         <AvatarGroup employees={row.employees} isDark={isDark} size="sm" />
                       </div>
                     </div>
@@ -320,14 +320,14 @@ function MainLayout() {
                       navigate(getShopPath(userShopSummary.shop_id));
                     }
                   }}
-                  className={`mt-3 rounded-2xl border p-3 transition ${
+                  className={`mt-2 rounded-xl border p-2.5 transition ${
                     userShopSummary?.shop_id ? "cursor-pointer hover:-translate-y-0.5" : ""
                   } ${isDark ? "border-[#c446ff]/40 bg-[#c446ff]/10" : "border-[#e8b7ff] bg-[#fdf7ff]"}`}
                 >
-                  <p className={`text-[11px] font-semibold uppercase tracking-[0.16em] ${isDark ? "text-slate-300" : "text-slate-500"}`}>
+                  <p className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${isDark ? "text-slate-300" : "text-slate-500"}`}>
                     🏪 Your Shop
                   </p>
-                  <div className="mt-2 flex flex-col gap-2">
+                  <div className="mt-1.5 flex flex-col gap-1.5">
                     <div className="min-w-0">
                       {userShopSummary?.shop_id ? (
                         <a
@@ -337,23 +337,23 @@ function MainLayout() {
                             setShowHighlights(false);
                             navigate(getShopPath(userShopSummary.shop_id));
                           }}
-                          className={`truncate text-lg font-semibold transition hover:text-[#c446ff] ${
+                          className={`truncate text-base font-semibold transition hover:text-[#c446ff] ${
                             isDark ? "text-slate-100" : "text-slate-950"
                           }`}
                         >
                           {userShopSummary.shopName}
                         </a>
                       ) : (
-                        <p className={`truncate text-lg font-semibold ${isDark ? "text-slate-100" : "text-slate-950"}`}>
+                        <p className={`truncate text-base font-semibold ${isDark ? "text-slate-100" : "text-slate-950"}`}>
                           Unassigned
                         </p>
                       )}
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-700"}`}>
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-700"}`}>
                         Rank {userShopSummary?.rank ? `#${userShopSummary.rank}` : "--"}
                       </span>
-                      <span className="rounded-full bg-[#c446ff] px-2.5 py-1 text-xs font-semibold text-white">
+                      <span className="rounded-full bg-[#c446ff] px-2 py-0.5 text-[11px] font-semibold text-white">
                         Achievement {userShopSummary?.achievement != null ? formatAchievement(userShopSummary.achievement) : "--"}
                       </span>
                     </div>
@@ -362,11 +362,11 @@ function MainLayout() {
               ) : null}
             </div>
 
-            <div className="mt-4 flex flex-col gap-2">
+            <div className="mt-3 flex flex-col gap-1.5">
               <button
                 type="button"
                 onClick={handleCloseHighlights}
-                className={`min-h-11 w-full rounded-full border px-4 py-2.5 text-sm font-semibold transition ${
+                className={`min-h-9 w-full rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
                   isDark
                     ? "border-slate-700 text-slate-200 hover:bg-slate-800"
                     : "border-slate-200 text-slate-700 hover:bg-slate-50"
@@ -377,7 +377,7 @@ function MainLayout() {
               <button
                 type="button"
                 onClick={handleViewLeaderboard}
-                className="min-h-11 w-full rounded-full bg-[#c446ff] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#ad32e3]"
+                className="min-h-9 w-full rounded-full bg-[#c446ff] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#ad32e3]"
               >
                 View Leaderboard
               </button>

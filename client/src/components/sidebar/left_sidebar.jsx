@@ -3,7 +3,6 @@ import Logo from "./logo";
 import UserSearch from "../user_search/user_search";
 import { useAuth } from "../../context/auth_context";
 import { useTheme } from "../../context/theme_context";
-import { GoCommentDiscussion } from "react-icons/go";
 import { useEffect, useState } from "react";
 import { subscribeToUnreadNotificationCount } from "../../services/notifications_service";
 
@@ -42,9 +41,8 @@ function LeftSidebar() {
           <MenuItem to="/anonymous-mailbox" icon="📬" title="Mailbox" />
           <MenuItem to="/leaderboard" icon="🏆" title="Leaderboard" />
           <MenuItem to="/monthly-champions" icon="👑" title="Champions" />
-          <MenuItem to="/individual-ranking" icon="👤" title="Individual Ranking" />
+          <MenuItem to="/individual-ranking" icon="👤" title="Soft Skill Ranking" />
           <MenuItem to="/shops" icon="🏪" title="Shops" />
-          <MenuItem to="/gemify-room" icon={<GoCommentDiscussion />} title="Gemify Room" />
           <MenuItem to="/profile" icon="👤" title="Profile" />
         </nav>
       </div>

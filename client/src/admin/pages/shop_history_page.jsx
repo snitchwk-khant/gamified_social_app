@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { AvatarGroup } from "../../components/shops/shop_leaderboard_table";
 import {
+  buildSharedShopHistoryRecords,
   deleteShopHistoryEmployees,
   deleteShopSalesTarget,
-  getShopAssignmentEmployees,
-  getShopHistoryEmployees,
-  getShopSalesTargets,
+  getShopEmployees,
+  getSharedShopHistoryRecords,
   getShops,
   saveShopHistoryEmployees,
   upsertShopSalesTarget,
 } from "../../services/shop_service";
+import {
+  calculateAchievement,
+} from "../../services/shop_history_calculation_service";
 
 const numberFormatter = new Intl.NumberFormat();
 const monthFormatter = new Intl.DateTimeFormat("en", { month: "long", year: "numeric" });
@@ -42,9 +45,7 @@ function getInitialForm() {
   const period = getDefaultHistoryPeriod();
 
   return {
-    employeeOfMonthId: "",
     month: period.month,
-    notes: "",
     reachedSales: "",
     recordId: "",
     shopId: "",
@@ -63,16 +64,6 @@ function formatMonth(month, year) {
   }
 
   return monthFormatter.format(new Date(Number(year), Number(month) - 1, 1));
-}
-
-function calculateAchievement(targetSales, reachedSales) {
-  const target = Number(targetSales || 0);
-
-  if (target <= 0) {
-    return 0;
-  }
-
-  return Math.round((Number(reachedSales || 0) / target) * 100);
 }
 
 function getProgressWidth(achievement) {
@@ -95,44 +86,42 @@ function getProgressColor(achievement) {
   return "from-slate-300 to-slate-500";
 }
 
-function getEmployeeName(employee) {
-  return employee?.full_name || employee?.email || "Unnamed employee";
-}
-
 function getShopName(shops, shopId) {
   const shop = shops.find((item) => item.id === shopId);
 
   return shop?.name || shopId || "Unassigned shop";
 }
 
+function getEmployeeName(employee) {
+  return employee?.full_name || employee?.name || employee?.email || "Employee";
+}
+
+function getInitials(name) {
+  return (
+    name
+      ?.split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "E"
+  );
+}
+
 function getRecordEmployees(record, employees) {
+  if (record.employees?.length) {
+    return record.employees;
+  }
+
   return employees.filter((employee) => record.employeeIds.includes(employee.id));
 }
 
-function buildHistoryRecords(targets = [], historyEmployees = []) {
-  const employeesByPeriod = historyEmployees.reduce((groups, row) => {
-    const key = `${row.shop_id}-${row.year}-${row.month}`;
-
-    if (!groups.has(key)) {
-      groups.set(key, []);
-    }
-
-    if (row.employee_id) {
-      groups.get(key).push(row.employee_id);
-    }
-
-    return groups;
-  }, new Map());
-
-  return targets.map((target) => {
-    const key = `${target.shop_id}-${target.year}-${target.month}`;
-
+function buildHistoryRecords(sharedRecords = []) {
+  return sharedRecords.map((target) => {
     return {
-      employeeIds: employeesByPeriod.get(key) || [],
-      employeeOfMonthId: "",
+      employeeIds: target.employeeIds || [],
+      employees: target.employees || [],
       id: target.id,
       month: String(target.month),
-      notes: "",
       reachedSales: String(target.current_sales ?? ""),
       shopId: target.shop_id,
       targetSales: String(target.target_sales ?? ""),
@@ -149,80 +138,94 @@ function ShopHistoryPage() {
   const [shopsError, setShopsError] = useState("");
   const [recordsLoading, setRecordsLoading] = useState(true);
   const [recordsError, setRecordsError] = useState("");
-  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState([]);
-  const [employeeSearch, setEmployeeSearch] = useState("");
   const [form, setForm] = useState(getInitialForm);
   const [errors, setErrors] = useState({});
   const [notice, setNotice] = useState("");
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState([]);
+  const [employeePickerOpen, setEmployeePickerOpen] = useState(false);
+  const [employeeSearch, setEmployeeSearch] = useState("");
 
   const isEditing = Boolean(form.recordId);
 
   useEffect(() => {
     let isMounted = true;
 
-    async function loadShopHistory() {
+    async function loadShops() {
       setShopsLoading(true);
-      setRecordsLoading(true);
       setShopsError("");
-      setRecordsError("");
 
       try {
-        const [shopRows, employeeRows, targetRows, historyEmployeeRows] = await Promise.all([
-          getShops(),
-          getShopAssignmentEmployees(),
-          getShopSalesTargets(),
-          getShopHistoryEmployees(),
-        ]);
+        const shopRows = await getShops({ activeOnly: true });
 
         if (isMounted) {
           setShops(shopRows);
-          setEmployees(employeeRows);
-          setRecords(buildHistoryRecords(targetRows, historyEmployeeRows));
         }
       } catch (err) {
-        console.error("Shop history load error:", err);
+        console.error("Shop load error:", err);
 
         if (isMounted) {
-          const message = err?.message || "Unable to load shop history.";
-          setShopsError(message);
-          setRecordsError(message);
+          setShopsError(err?.message || "Unable to load shops.");
         }
       } finally {
         if (isMounted) {
           setShopsLoading(false);
-          setRecordsLoading(false);
         }
       }
     }
 
-    loadShopHistory();
+    loadShops();
 
     return () => {
       isMounted = false;
     };
   }, []);
 
-  const filteredEmployees = useMemo(() => {
-    const normalizedSearch = employeeSearch.trim().toLowerCase();
+  useEffect(() => {
+    let isMounted = true;
 
-    if (!normalizedSearch) {
-      return employees;
+    async function loadSelectedShopHistory() {
+      if (!form.shopId) {
+        setEmployees([]);
+        setRecords([]);
+        setRecordsLoading(false);
+        setRecordsError("");
+        return;
+      }
+
+      setRecordsLoading(true);
+      setRecordsError("");
+
+      try {
+        const [employeeRows, historyRows] = await Promise.all([
+          getShopEmployees(form.shopId),
+          getSharedShopHistoryRecords({ month: form.month, shopId: form.shopId, year: form.year }),
+        ]);
+
+        if (isMounted) {
+          setEmployees(employeeRows);
+          setRecords(buildHistoryRecords(historyRows));
+        }
+      } catch (err) {
+        console.error("Shop history load error:", err);
+
+        if (isMounted) {
+          setEmployees([]);
+          setRecords([]);
+          setRecordsError(err?.message || "Unable to load shop history.");
+        }
+      } finally {
+        if (isMounted) {
+          setRecordsLoading(false);
+        }
+      }
     }
 
-    return employees.filter((employee) =>
-      [employee.full_name, employee.email].some((value) =>
-        value?.toString().toLowerCase().includes(normalizedSearch)
-      )
-    );
-  }, [employeeSearch, employees]);
+    loadSelectedShopHistory();
 
-  const employeeOfMonthOptions = useMemo(() => {
-    if (!selectedEmployeeIds.length) {
-      return employees;
-    }
-
-    return employees.filter((employee) => selectedEmployeeIds.includes(employee.id));
-  }, [employees, selectedEmployeeIds]);
+    return () => {
+      isMounted = false;
+    };
+  }, [form.month, form.shopId, form.year]);
 
   const visibleRows = useMemo(() => {
     if (!form.shopId) {
@@ -231,10 +234,36 @@ function ShopHistoryPage() {
 
     return records.filter((record) => record.shopId === form.shopId);
   }, [form.shopId, records]);
+  const selectedShop = useMemo(() => shops.find((shop) => shop.id === form.shopId) || null, [form.shopId, shops]);
+  const emptyHistoryMessage = form.shopId
+    ? `No history found for ${formatMonth(form.month, form.year)}.`
+    : "Select a shop to view history.";
+  const selectedEmployees = useMemo(
+    () => selectedEmployeeIds
+      .map((employeeId) => employees.find((employee) => employee.id === employeeId))
+      .filter(Boolean),
+    [employees, selectedEmployeeIds]
+  );
+  const availableEmployees = useMemo(() => {
+    const normalizedSearch = employeeSearch.trim().toLowerCase();
+
+    return employees.filter((employee) => {
+      if (selectedEmployeeIds.includes(employee.id)) {
+        return false;
+      }
+
+      if (!normalizedSearch) {
+        return true;
+      }
+
+      return getEmployeeName(employee).toLowerCase().includes(normalizedSearch);
+    });
+  }, [employeeSearch, employees, selectedEmployeeIds]);
 
   const updateForm = (field, value) => {
     setForm((current) => ({
       ...current,
+      recordId: ["month", "shopId", "year"].includes(field) ? "" : current.recordId,
       [field]: value,
     }));
     setErrors((current) => ({
@@ -242,13 +271,20 @@ function ShopHistoryPage() {
       [field]: "",
     }));
     setNotice("");
+
+    if (field === "shopId") {
+      setSelectedEmployeeIds([]);
+      setEmployeePickerOpen(false);
+      setEmployeeSearch("");
+    }
   };
 
   const resetForm = () => {
     setForm(getInitialForm());
-    setSelectedEmployeeIds([]);
-    setEmployeeSearch("");
     setErrors({});
+    setSelectedEmployeeIds([]);
+    setEmployeePickerOpen(false);
+    setEmployeeSearch("");
   };
 
   const validateForm = () => {
@@ -274,7 +310,35 @@ function ShopHistoryPage() {
       nextErrors.reachedSales = "Reached Sales must be 0 or more.";
     }
 
+    if (!selectedEmployeeIds.length) {
+      nextErrors.employees = "Select at least one employee.";
+    }
+
+    const validEmployeeIds = new Set(employees.map((employee) => employee.id));
+    const hasInvalidEmployee = selectedEmployeeIds.some((employeeId) => !validEmployeeIds.has(employeeId));
+
+    if (hasInvalidEmployee) {
+      nextErrors.employees = "Only employees assigned to this shop can be selected.";
+    }
+
     return nextErrors;
+  };
+
+  const addEmployee = (employeeId) => {
+    if (!employees.some((employee) => employee.id === employeeId)) {
+      return;
+    }
+
+    setSelectedEmployeeIds((current) => (current.includes(employeeId) ? current : [...current, employeeId]));
+    setErrors((current) => ({
+      ...current,
+      employees: "",
+    }));
+    setEmployeeSearch("");
+  };
+
+  const removeEmployee = (employeeId) => {
+    setSelectedEmployeeIds((current) => current.filter((id) => id !== employeeId));
   };
 
   const handleSubmit = async (event) => {
@@ -302,7 +366,7 @@ function ShopHistoryPage() {
         shopId: form.shopId,
         year: form.year,
       });
-      const nextRecord = buildHistoryRecords([savedTarget], savedEmployees)[0];
+      const nextRecord = buildHistoryRecords(buildSharedShopHistoryRecords([savedTarget], savedEmployees))[0];
 
       setRecords((current) => {
         const withoutExistingPeriod = current.filter((record) => {
@@ -321,50 +385,18 @@ function ShopHistoryPage() {
 
   const handleEdit = (record) => {
     setForm({
-      employeeOfMonthId: record.employeeOfMonthId,
       month: record.month,
-      notes: record.notes,
       reachedSales: record.reachedSales,
       recordId: record.id,
       shopId: record.shopId,
       targetSales: record.targetSales,
       year: record.year,
     });
-    setSelectedEmployeeIds(record.employeeIds);
+    setSelectedEmployeeIds(record.employeeIds || []);
+    setEmployeePickerOpen(false);
     setEmployeeSearch("");
     setErrors({});
     setNotice("");
-  };
-
-  const toggleEmployee = (employeeId) => {
-    setSelectedEmployeeIds((current) => {
-      const hasEmployee = current.includes(employeeId);
-      const nextEmployeeIds = hasEmployee
-        ? current.filter((id) => id !== employeeId)
-        : [...current, employeeId];
-
-      if (hasEmployee && form.employeeOfMonthId === employeeId) {
-        setForm((currentForm) => ({
-          ...currentForm,
-          employeeOfMonthId: "",
-        }));
-      }
-
-      return nextEmployeeIds;
-    });
-  };
-
-  const handleEmployeeOfMonthChange = (employeeId) => {
-    setForm((current) => ({
-      ...current,
-      employeeOfMonthId: employeeId,
-    }));
-
-    if (employeeId) {
-      setSelectedEmployeeIds((current) =>
-        current.includes(employeeId) ? current : [...current, employeeId]
-      );
-    }
   };
 
   const handleDelete = async (recordId) => {
@@ -489,83 +521,66 @@ function ShopHistoryPage() {
           </label>
         </div>
 
-        <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="mt-5 rounded-[24px] border border-slate-200 bg-slate-50 p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-semibold text-slate-950">Employees</p>
-              <p className="mt-1 text-xs text-slate-500">
-                Select employees who worked in this shop for the historical month.
-              </p>
+              <p className="text-sm font-semibold text-slate-800">Employees</p>
+              <p className="mt-1 text-xs text-slate-500">Select employees currently assigned to this shop.</p>
             </div>
-            <p className="text-sm font-semibold text-slate-500">
-              {selectedEmployeeIds.length} selected
-            </p>
+            <button
+              type="button"
+              onClick={() => setEmployeePickerOpen((current) => !current)}
+              disabled={!form.shopId || recordsLoading}
+              className="h-10 rounded-2xl bg-[#c446ff] px-4 text-sm font-semibold text-white transition hover:bg-[#ad32e3] disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              + Add Employee
+            </button>
           </div>
 
-          <input
-            type="search"
-            value={employeeSearch}
-            onChange={(event) => setEmployeeSearch(event.target.value)}
-            placeholder="Search employees"
-            className="mt-4 h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#c446ff]"
-          />
+          {selectedEmployees.length ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {selectedEmployees.map((employee) => (
+                <EmployeeChip key={employee.id} employee={employee} onRemove={() => removeEmployee(employee.id)} />
+              ))}
+            </div>
+          ) : (
+            <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-5 text-center text-sm text-slate-500">
+              No employees selected.
+            </div>
+          )}
 
-          <div className="mt-4 max-h-56 overflow-auto rounded-2xl border border-slate-200 bg-white">
-            {filteredEmployees.length ? (
-              filteredEmployees.map((employee) => {
-                const displayName = getEmployeeName(employee);
-
-                return (
-                  <label
-                    key={employee.id}
-                    className="flex cursor-pointer items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 text-sm last:border-b-0 hover:bg-slate-50"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate font-semibold text-slate-800">{displayName}</span>
-                      <span className="block truncate text-xs text-slate-500">{employee.email}</span>
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={selectedEmployeeIds.includes(employee.id)}
-                      onChange={() => toggleEmployee(employee.id)}
-                      className="h-4 w-4 accent-[#c446ff]"
-                    />
-                  </label>
-                );
-              })
-            ) : (
-              <p className="px-4 py-6 text-center text-sm text-slate-500">No employees found.</p>
-            )}
-          </div>
-
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <label className="block text-sm font-medium text-slate-700">
-              Employee of the Month
-              <select
-                value={form.employeeOfMonthId}
-                onChange={(event) => handleEmployeeOfMonthChange(event.target.value)}
-                className="mt-2 h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-950 outline-none transition focus:border-[#c446ff]"
-              >
-                <option value="">Select employee</option>
-                {employeeOfMonthOptions.map((employee) => (
-                  <option key={employee.id} value={employee.id}>
-                    {getEmployeeName(employee)}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block text-sm font-medium text-slate-700">
-              Notes
-              <textarea
-                value={form.notes}
-                onChange={(event) => updateForm("notes", event.target.value)}
-                rows={3}
-                className="mt-2 min-h-24 w-full resize-y rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#c446ff]"
-                placeholder="Add monthly context or recognition notes"
+          {employeePickerOpen ? (
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+              <input
+                type="search"
+                value={employeeSearch}
+                onChange={(event) => setEmployeeSearch(event.target.value)}
+                placeholder="Search employees"
+                className="h-10 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-950 outline-none transition focus:border-[#c446ff] focus:bg-white"
               />
-            </label>
-          </div>
+              <div className="mt-3 max-h-60 space-y-2 overflow-y-auto">
+                {availableEmployees.map((employee) => (
+                  <button
+                    key={employee.id}
+                    type="button"
+                    onClick={() => addEmployee(employee.id)}
+                    className="flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition hover:bg-[#f6e8ff]"
+                  >
+                    <EmployeeAvatar employee={employee} />
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">{getEmployeeName(employee)}</span>
+                  </button>
+                ))}
+
+                {!availableEmployees.length ? (
+                  <div className="rounded-2xl bg-slate-50 px-4 py-5 text-center text-sm text-slate-500">
+                    {employees.length ? "No more employees available." : "No employees assigned to this shop."}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          {errors.employees ? <p className="mt-2 text-xs text-rose-600">{errors.employees}</p> : null}
         </div>
 
         <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -658,12 +673,42 @@ function ShopHistoryPage() {
 
           {!recordsLoading && !visibleRows.length ? (
             <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-5 py-8 text-center text-sm text-slate-500">
-              No historical shop records found.
+              {selectedShop ? `${emptyHistoryMessage}` : emptyHistoryMessage}
             </div>
           ) : null}
         </div>
       </div>
     </section>
+  );
+}
+
+function EmployeeAvatar({ employee }) {
+  const employeeName = getEmployeeName(employee);
+  const avatarUrl = employee?.avatar_url || employee?.avatarUrl;
+
+  return (
+    <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-[#f6e8ff] text-xs font-bold text-[#c446ff] shadow-sm">
+      {avatarUrl ? <img src={avatarUrl} alt={employeeName} className="h-full w-full object-cover" /> : getInitials(employeeName)}
+    </span>
+  );
+}
+
+function EmployeeChip({ employee, onRemove }) {
+  const employeeName = getEmployeeName(employee);
+
+  return (
+    <span className="inline-flex max-w-full items-center gap-2 rounded-2xl border border-slate-200 bg-white py-1 pl-1 pr-2 shadow-sm">
+      <EmployeeAvatar employee={employee} />
+      <span className="max-w-40 truncate text-sm font-semibold text-slate-800">{employeeName}</span>
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={`Remove ${employeeName}`}
+        className="flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold text-slate-500 transition hover:bg-rose-50 hover:text-rose-600"
+      >
+        x
+      </button>
+    </span>
   );
 }
 

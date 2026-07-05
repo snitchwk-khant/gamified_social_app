@@ -5,6 +5,7 @@ import AdminPlaceholderPage from "../pages/admin_placeholder_page";
 import AdminUsersPage from "../pages/admin_users_page";
 import AnonymousMailboxAdminPage from "../pages/anonymous_mailbox_admin_page";
 import AnnouncementsPage from "../pages/announcements_page";
+import EmployeeDetailsPage from "../pages/employee_details_page";
 import LeaderboardSettingsPage from "../pages/leaderboard_settings_page";
 import NotificationsAdminPage from "../pages/notifications_admin_page";
 import SalesTargetsPage from "../pages/sales_targets_page";
@@ -74,6 +75,13 @@ export const adminRoutes = [
     label: "Announcements",
     title: "Announcements",
     icon: "announcements",
+    allowedRoles: ["admin", "accountant"],
+  },
+  {
+    path: "employee-details",
+    label: "Employee Details",
+    title: "Employee Details",
+    icon: "users",
     allowedRoles: ["admin", "accountant"],
   },
   {
@@ -157,6 +165,10 @@ export function createAdminRouteElement(route) {
 
   if (route.path === "announcements") {
     page = <AnnouncementsPage />;
+  }
+
+  if (route.path === "employee-details") {
+    page = <EmployeeDetailsPage />;
   }
 
   if (route.path === "notifications") {

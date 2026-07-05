@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/auth_context";
 import { useTheme } from "../context/theme_context";
 import {
@@ -10,6 +10,7 @@ import {
 import { getProfilePath } from "../utils/profile_path";
 
 const numberFormatter = new Intl.NumberFormat();
+const championsBoardPlaceholderEnabled = true;
 
 function getInitials(name, email) {
   const source = name || email || "Champion";
@@ -23,7 +24,42 @@ function getInitials(name, email) {
   );
 }
 
+function ChampionsBoardComingSoon() {
+  const navigate = useNavigate();
+  const { isDark } = useTheme();
+
+  return (
+    <section className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-3 py-8">
+      <div
+        className={`w-full max-w-xl animate-[profile-view-in_180ms_ease-out] rounded-[28px] border px-6 py-10 text-center shadow-2xl sm:px-10 ${
+          isDark ? "border-slate-800 bg-slate-950 text-slate-100 shadow-slate-950/25" : "border-slate-200 bg-white text-slate-950 shadow-slate-200/70"
+        }`}
+      >
+        <p className="text-6xl" aria-hidden="true">
+          🏆
+        </p>
+        <h1 className="mt-5 text-3xl font-black sm:text-4xl">Champions Board</h1>
+        <p className="mt-4 text-2xl font-bold text-[#c446ff]">Coming Soon</p>
+        <p className={`mx-auto mt-3 max-w-sm text-sm leading-6 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+          This feature is currently under development. Check back in a future update.
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate("/")}
+          className="mt-7 h-11 rounded-2xl bg-[#c446ff] px-6 text-sm font-semibold text-white transition hover:bg-[#ad32e3] focus:outline-none focus:ring-2 focus:ring-[#c446ff]/60"
+        >
+          Return to Home
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function MonthlyChampionsPage() {
+  return championsBoardPlaceholderEnabled ? <ChampionsBoardComingSoon /> : <OriginalMonthlyChampionsPage />;
+}
+
+function OriginalMonthlyChampionsPage() {
   const { user } = useAuth();
   const { isDark } = useTheme();
   const [champions, setChampions] = useState([]);

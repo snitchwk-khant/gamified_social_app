@@ -11,8 +11,14 @@ const DEFAULT_FORM = {
   message: "",
 };
 
+const MESSAGE_TABS = [
+  { id: "mailbox", label: "Mailbox" },
+  { id: "gemify-room", label: "Gemify Room" },
+];
+
 function AnonymousMailboxPage() {
   const { isDark } = useTheme();
+  const [activeTab, setActiveTab] = useState("mailbox");
   const [form, setForm] = useState(DEFAULT_FORM);
   const [formErrors, setFormErrors] = useState({});
   const [formError, setFormError] = useState("");
@@ -60,6 +66,38 @@ function AnonymousMailboxPage() {
 
   return (
     <section className="space-y-5 pb-20 sm:pb-0">
+      <div
+        className={`rounded-3xl border p-4 shadow-sm ${
+          isDark ? "border-slate-800 bg-slate-950 text-slate-100" : "border-slate-200 bg-white text-slate-900"
+        }`}
+      >
+        <h1 className="text-2xl font-bold">Messages</h1>
+        <div className={`mt-4 grid grid-cols-2 rounded-2xl p-1 ${isDark ? "bg-slate-900" : "bg-slate-100"}`}>
+          {MESSAGE_TABS.map((tab) => {
+            const isActive = activeTab === tab.id;
+
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`h-10 rounded-xl px-3 text-sm font-semibold transition ${
+                  isActive
+                    ? "bg-[#c446ff] text-white shadow-sm"
+                    : isDark
+                      ? "text-slate-300 hover:bg-slate-800"
+                      : "text-slate-600 hover:bg-white"
+                }`}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {activeTab === "mailbox" ? (
+        <div className="transition-opacity duration-200">
       <div
         className={`rounded-3xl border p-5 shadow-sm ${
           isDark ? "border-slate-800 bg-slate-950 text-slate-100" : "border-slate-200 bg-white text-slate-900"
@@ -116,7 +154,29 @@ function AnonymousMailboxPage() {
           {saving ? "Submitting..." : "Submit Anonymous Message"}
         </button>
       </form>
+        </div>
+      ) : (
+        <GemifyRoomPlaceholder isDark={isDark} />
+      )}
     </section>
+  );
+}
+
+function GemifyRoomPlaceholder({ isDark }) {
+  return (
+    <div
+      className={`rounded-3xl border p-8 text-center shadow-sm transition-opacity duration-200 ${
+        isDark ? "border-slate-800 bg-slate-950 text-slate-100" : "border-slate-200 bg-white text-slate-900"
+      }`}
+    >
+      <div className="text-4xl" aria-hidden="true">
+        💬
+      </div>
+      <h2 className="mt-4 text-xl font-bold">Gemify Room</h2>
+      <p className={isDark ? "mt-2 text-sm text-slate-400" : "mt-2 text-sm text-slate-500"}>
+        Coming Soon
+      </p>
+    </div>
   );
 }
 

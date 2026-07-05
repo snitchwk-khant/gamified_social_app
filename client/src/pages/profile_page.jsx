@@ -101,6 +101,39 @@ function formatAchievementValue(value) {
   return `${new Intl.NumberFormat().format(numericValue)}%`;
 }
 
+function formatExperienceFromStartDate(employmentStartDate) {
+  if (!employmentStartDate) {
+    return "—";
+  }
+
+  const startDate = new Date(employmentStartDate);
+
+  if (Number.isNaN(startDate.getTime())) {
+    return "—";
+  }
+
+  const today = new Date();
+  const totalMonths = (today.getFullYear() - startDate.getFullYear()) * 12 + today.getMonth() - startDate.getMonth();
+
+  if (totalMonths < 0) {
+    return "—";
+  }
+
+  const years = Math.floor(totalMonths / 12);
+  const months = totalMonths % 12;
+  const parts = [];
+
+  if (years > 0) {
+    parts.push(`${years} ${years === 1 ? "Year" : "Years"}`);
+  }
+
+  if (months > 0 || years === 0) {
+    parts.push(`${months} ${months === 1 ? "Month" : "Months"}`);
+  }
+
+  return parts.join(" & ");
+}
+
 function ProfilePage() {
   const { userId: routeUserId } = useParams();
   const { user, refreshUserProfile, signOut } = useAuth();
@@ -140,6 +173,7 @@ function ProfilePage() {
   const championCountLabel = `${new Intl.NumberFormat().format(championHistory.length)}x Champion`;
   const isWorkProfile = activeProfileView === "work";
   const relationshipStatus = profile?.relationship_status?.toString().trim() || "";
+  const experienceLabel = formatExperienceFromStartDate(profile?.employment_start_date);
 
   useEffect(() => {
     setActiveProfileView("personal");
@@ -590,6 +624,7 @@ function ProfilePage() {
             initials={initials}
             isDark={isDark}
             isOwnProfile={isOwnProfile}
+            experienceLabel={experienceLabel}
             editing={editing}
             onToggleView={() => {
               setActiveProfileView((currentView) => {
@@ -811,6 +846,7 @@ function ProfileHeader({
   initials,
   isDark,
   isOwnProfile,
+  experienceLabel,
   editing,
   onToggleEdit,
   onToggleView,
@@ -868,6 +904,11 @@ function ProfileHeader({
               >
                 {relationshipBadge}
               </span>
+            ) : null}
+            {isPersonalView && experienceLabel !== "—" ? (
+              <p className="mt-2 text-sm font-semibold text-[#c446ff]">
+                {experienceLabel}
+              </p>
             ) : null}
             {!isPersonalView && workTitle ? (
               <p className={`mt-2 text-sm font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
@@ -960,17 +1001,29 @@ function PersonalProfile({
   toggleTheme,
   zodiacSign,
 }) {
-  const gallerySlots = Array.from({ length: 6 }, (_, index) => {
-    const albumImage = albumImages[index] || null;
-    const isFirstEmptySlot = !albumImage && index === albumImages.length;
-
-    return {
+  const galleryItems = [
+    ...albumImages.slice(0, 6).map((albumImage, index) => ({
       albumImage,
-      isAddSlot: isOwnProfile && isFirstEmptySlot && albumImages.length < 6,
-      isPlaceholder: !albumImage && !(isOwnProfile && isFirstEmptySlot && albumImages.length < 6),
       index,
-    };
-  });
+      type: "photo",
+    })),
+    ...(isOwnProfile && albumImages.length < 6
+      ? [
+          {
+            index: albumImages.length,
+            type: "add",
+          },
+        ]
+      : []),
+  ];
+  const galleryGridClass =
+    galleryItems.length <= 1
+      ? "mx-auto grid max-w-xs grid-cols-1 gap-2"
+      : galleryItems.length === 2
+        ? "grid grid-cols-2 gap-2"
+        : galleryItems.length === 3
+          ? "grid grid-cols-3 gap-2"
+          : "grid grid-cols-2 gap-2 sm:grid-cols-3";
 
   return (
     <div className="space-y-5 sm:space-y-6">
@@ -1027,25 +1080,25 @@ function PersonalProfile({
           isDark ? "border-slate-800 bg-slate-900 shadow-xl" : "border-slate-200 bg-white shadow-sm"
         }`}
       >
-        <h3 className={`mb-4 text-lg font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>6 Photos</h3>
-        <div className="grid grid-cols-3 gap-2">
-          {gallerySlots.map((slot) => {
-            if (slot.albumImage) {
+        {galleryItems.length ? (
+          <div className={galleryGridClass}>
+            {galleryItems.map((item) => {
+              if (item.type === "photo") {
               return (
-                <div key={slot.albumImage.id} className="group relative aspect-square overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+                <div key={item.albumImage.id} className="group relative aspect-square overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
                   <button
                     type="button"
-                    onClick={() => setViewerIndex(slot.index)}
+                    onClick={() => setViewerIndex(item.index)}
                     className="h-full w-full"
                   >
-                    <img src={slot.albumImage.image_url} alt={`Profile photo ${slot.index + 1}`} className="h-full w-full object-cover" />
+                    <img src={item.albumImage.image_url} alt={`Profile photo ${item.index + 1}`} className="h-full w-full object-cover" />
                   </button>
 
                   {isOwnProfile ? (
                     <div className="absolute inset-x-2 bottom-2 flex gap-1 opacity-100 sm:opacity-0 sm:transition sm:group-hover:opacity-100">
                       <button
                         type="button"
-                        onClick={() => handleOpenAlbumPicker({ albumImage: slot.albumImage, index: slot.index })}
+                        onClick={() => handleOpenAlbumPicker({ albumImage: item.albumImage, index: item.index })}
                         disabled={albumUploading}
                         className="flex-1 rounded-full bg-black/70 px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-70"
                       >
@@ -1053,7 +1106,7 @@ function PersonalProfile({
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleDeleteAlbumImage(slot.albumImage)}
+                        onClick={() => handleDeleteAlbumImage(item.albumImage)}
                         disabled={albumUploading}
                         className="flex-1 rounded-full bg-black/70 px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-70"
                       >
@@ -1065,37 +1118,27 @@ function PersonalProfile({
               );
             }
 
-            if (slot.isAddSlot) {
-              return (
-                <button
-                  key={`gallery-add-${slot.index}`}
-                  type="button"
-                  onClick={() => handleOpenAlbumPicker()}
-                  disabled={albumUploading}
-                  className={`aspect-square rounded-2xl border border-dashed text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 ${
-                    isDark
-                      ? "border-slate-700 bg-slate-950 text-slate-300 hover:bg-slate-800"
-                      : "border-slate-300 bg-slate-50 text-slate-600 hover:bg-slate-100"
-                  }`}
-                >
-                  <span className="flex h-full flex-col items-center justify-center gap-2">
-                    <span className="text-2xl leading-none">+</span>
-                    <span>{albumUploading ? "Adding..." : "Add Photo"}</span>
-                  </span>
-                </button>
-              );
-            }
-
             return (
-              <div
-                key={`gallery-placeholder-${slot.index}`}
-                className={`aspect-square rounded-2xl border ${
-                  isDark ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-slate-50"
+              <button
+                key={`gallery-add-${item.index}`}
+                type="button"
+                onClick={() => handleOpenAlbumPicker()}
+                disabled={albumUploading}
+                className={`aspect-square rounded-2xl border border-dashed text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 ${
+                  isDark
+                    ? "border-slate-700 bg-slate-950 text-slate-300 hover:bg-slate-800"
+                    : "border-slate-300 bg-slate-50 text-slate-600 hover:bg-slate-100"
                 }`}
-              />
+              >
+                <span className="flex h-full flex-col items-center justify-center gap-2">
+                  <span className="text-2xl leading-none">+</span>
+                  <span>{albumUploading ? "Adding..." : "Add Photo"}</span>
+                </span>
+              </button>
             );
           })}
-        </div>
+          </div>
+        ) : null}
       </section>
 
       <section

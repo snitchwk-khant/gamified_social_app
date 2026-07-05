@@ -1,5 +1,6 @@
 import { supabase } from "../lib/supabase";
-import { buildPerformanceRanking, calculateAchievement } from "./ranking_service";
+import { calculateAchievement } from "./ranking_service";
+import { buildShopHistoryRanking } from "./shop_history_calculation_service";
 
 const SHOP_FIELDS = [
   "id",
@@ -50,6 +51,8 @@ let shopTargetsChannel = null;
 const shopTargetSubscribers = new Set();
 let shopAssignmentsChannel = null;
 const shopAssignmentSubscribers = new Set();
+let shopHistoryEmployeesChannel = null;
+const shopHistoryEmployeeSubscribers = new Set();
 
 function normalizeNumber(value) {
   return Math.max(0, Number(value) || 0);
@@ -333,7 +336,16 @@ export async function getShopSalesTargets({ month = null, year = null, shopId = 
   return data || [];
 }
 
-export async function upsertShopSalesTarget({ shopId, shop_id, month, year, targetSales, target_sales, currentSales, current_sales }) {
+export async function upsertShopSalesTarget({
+  currentSales,
+  current_sales,
+  month,
+  shopId,
+  shop_id,
+  targetSales,
+  target_sales,
+  year,
+}) {
   const targetShopId = shopId || shop_id;
 
   if (!targetShopId) {
@@ -408,6 +420,43 @@ export async function getShopHistoryEmployees({ shopId = null, month = null, yea
   return data || [];
 }
 
+export function buildSharedShopHistoryRecords(targets = [], historyEmployees = []) {
+  const employeesByPeriod = historyEmployees.reduce((groups, row) => {
+    const key = `${row.shop_id}-${row.year}-${row.month}`;
+
+    if (!groups.has(key)) {
+      groups.set(key, []);
+    }
+
+    if (row.employee_id) {
+      groups.get(key).push(row);
+    }
+
+    return groups;
+  }, new Map());
+
+  return targets.map((target) => {
+    const key = `${target.shop_id}-${target.year}-${target.month}`;
+    const employeeRows = employeesByPeriod.get(key) || [];
+
+    return {
+      ...target,
+      employeeIds: employeeRows.map((row) => row.employee_id).filter(Boolean),
+      employees: employeeRows.map((row) => row.employee).filter(Boolean),
+      historyEmployees: employeeRows,
+    };
+  });
+}
+
+export async function getSharedShopHistoryRecords({ shopId = null, month = null, year = null } = {}) {
+  const [targetRows, historyEmployeeRows] = await Promise.all([
+    getShopSalesTargets({ shopId, month, year }),
+    getShopHistoryEmployees({ shopId, month, year }),
+  ]);
+
+  return buildSharedShopHistoryRecords(targetRows, historyEmployeeRows);
+}
+
 export async function saveShopHistoryEmployees({ shopId, month, year, employeeIds = [] }) {
   if (!shopId) {
     throw new Error("Shop is required.");
@@ -470,14 +519,7 @@ export async function deleteShopHistoryEmployees({ shopId, month, year }) {
 }
 
 export function buildShopLeaderboard(targets = [], { searchTerm = "" } = {}) {
-  return buildPerformanceRanking(targets, {
-    searchTerm,
-    useUpdatedAtTieBreaker: true,
-    getName: (target) => target.shop?.name || "Unnamed shop",
-  }).map((target) => ({
-    ...target,
-    shopName: target.shop?.name || "Unnamed shop",
-  }));
+  return buildShopHistoryRanking(targets, { searchTerm });
 }
 
 export async function getShopMonthlyChampion(month) {
@@ -565,10 +607,37 @@ export function subscribeToShopAssignments(onChange) {
   };
 }
 
+export function subscribeToShopHistoryEmployees(onChange) {
+  shopHistoryEmployeeSubscribers.add(onChange);
+
+  if (!shopHistoryEmployeesChannel) {
+    shopHistoryEmployeesChannel = supabase
+      .channel("shop-history-employees-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "shop_history_employees" },
+        (payload) => {
+          shopHistoryEmployeeSubscribers.forEach((subscriber) => subscriber(payload));
+        }
+      )
+      .subscribe();
+  }
+
+  return () => {
+    shopHistoryEmployeeSubscribers.delete(onChange);
+
+    if (!shopHistoryEmployeeSubscribers.size && shopHistoryEmployeesChannel) {
+      supabase.removeChannel(shopHistoryEmployeesChannel);
+      shopHistoryEmployeesChannel = null;
+    }
+  };
+}
+
 export { calculateAchievement };
 
 export default {
   buildShopLeaderboard,
+  buildSharedShopHistoryRecords,
   calculateAchievement,
   createShop,
   deleteShop,
@@ -581,10 +650,12 @@ export default {
   getShopEmployeeCounts,
   getShopEmployees,
   getShopHistoryEmployees,
+  getSharedShopHistoryRecords,
   getShopMonthlyChampion,
   getShopSalesTargets,
   getShops,
   subscribeToShopAssignments,
+  subscribeToShopHistoryEmployees,
   subscribeToShopTargets,
   saveShopHistoryEmployees,
   updateShop,

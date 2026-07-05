@@ -17,7 +17,6 @@ import MonthlyChampionsPage from "./pages/monthly_champions_page";
 import IndividualRankingPage from "./pages/individual_ranking_page";
 import ShopsPage from "./pages/shops_page";
 import ShopProfilePage from "./pages/shop_profile_page";
-import ChatWidget from "./components/chat/chat_widget";
 import { getProfile } from "./services/profile_service";
 
 function RequireAuth({ children }) {
@@ -285,7 +284,6 @@ function App() {
                 <Route path="individual-ranking" element={<IndividualRankingPage />} />
                 <Route path="shops" element={<ShopsPage />} />
                 <Route path="shops/:shopId" element={<ShopProfilePage />} />
-                <Route path="gemify-room" element={<ChatWidget fullScreen />} />
                 <Route path="profile" element={<ProfilePage />} />
                 <Route path="profile/:userId" element={<ProfilePage />} />
                 <Route path="shop/:id" element={<ShopProfilePage />} />
