@@ -351,7 +351,7 @@ function StoryViewer({ isOpen, stories = [], initialIndex = 0, initialStoryId = 
         className="absolute inset-y-0 right-0 z-10 w-1/2 cursor-pointer bg-transparent"
       />
 
-      <div className="absolute left-0 right-0 top-0 z-20 px-2 pt-2 sm:px-6 sm:pt-4">
+      <div className="absolute left-0 right-0 top-0 z-20 pl-[calc(0.5rem+var(--safe-area-inset-left))] pr-[calc(0.5rem+var(--safe-area-inset-right))] pt-[calc(0.5rem+var(--safe-area-inset-top))] sm:pl-[calc(1.5rem+var(--safe-area-inset-left))] sm:pr-[calc(1.5rem+var(--safe-area-inset-right))] sm:pt-[calc(1rem+var(--safe-area-inset-top))]">
         <div className="flex gap-1.5">
           {progressSegments.map((segment, index) => (
             <button

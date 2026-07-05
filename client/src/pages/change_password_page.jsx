@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import SafeAreaLayout from "../components/layout/SafeAreaLayout";
 import { useAuth } from "../context/auth_context";
 import { supabase } from "../lib/supabase";
 
@@ -78,7 +79,7 @@ function ChangePasswordPage() {
         ...user,
         must_change_password: false,
       });
-      navigate("/", { replace: true });
+      navigate("/home", { replace: true });
     } catch (submitError) {
       setError(submitError?.message || "Unable to change password.");
     } finally {
@@ -87,8 +88,9 @@ function ChangePasswordPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-10 text-slate-100">
-      <div className="w-full max-w-lg rounded-[32px] border border-slate-800 bg-slate-900 p-8 shadow-xl shadow-slate-950/20">
+    <SafeAreaLayout className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-100">
+      <div className="w-full px-4 py-10">
+        <div className="mx-auto w-full max-w-lg rounded-[32px] border border-slate-800 bg-slate-900 p-8 shadow-xl shadow-slate-950/20">
         <p className="text-sm uppercase tracking-[0.28em] text-sky-400">Secure account</p>
         <h1 className="mt-3 text-3xl font-semibold">Change your temporary password</h1>
         <p className="mt-2 text-sm text-slate-400">
@@ -142,8 +144,9 @@ function ChangePasswordPage() {
             {loading ? "Updating..." : "Update Password"}
           </button>
         </form>
+        </div>
       </div>
-    </div>
+    </SafeAreaLayout>
   );
 }
 

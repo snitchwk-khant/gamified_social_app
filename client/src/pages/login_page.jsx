@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import SafeAreaLayout from "../components/layout/SafeAreaLayout";
 import { useAuth } from "../context/auth_context";
 
 function LoginPage() {
@@ -18,7 +19,7 @@ function LoginPage() {
     try {
       const nextUser = await signIn({ email, password });
       window.sessionStorage.setItem("gemify-show-welcome-leaderboard", nextUser?.id || "true");
-      navigate(nextUser?.must_change_password ? "/change-password" : "/", { replace: true });
+      navigate(nextUser?.must_change_password ? "/change-password" : "/home", { replace: true });
     } catch {
       setError("Invalid email or password");
     } finally {
@@ -27,8 +28,9 @@ function LoginPage() {
   };
 
   return (
-    <div className="grid min-h-screen place-items-center overflow-x-hidden bg-slate-950 px-3 py-6 text-slate-100 sm:px-4 sm:py-10">
-      <div className="w-full max-w-md rounded-[24px] border border-slate-800 bg-slate-900 p-5 shadow-xl shadow-slate-950/20 sm:rounded-[32px] sm:p-8">
+    <SafeAreaLayout className="grid min-h-screen place-items-center overflow-x-hidden bg-slate-950 text-slate-100">
+      <div className="w-full px-3 py-6 sm:px-4 sm:py-10">
+        <div className="mx-auto w-full max-w-md rounded-[24px] border border-slate-800 bg-slate-900 p-5 shadow-xl shadow-slate-950/20 sm:rounded-[32px] sm:p-8">
         <div className="mb-6">
           <p className="text-xs uppercase tracking-[0.24em] text-sky-400 sm:text-sm sm:tracking-[0.28em]">Company network</p>
           <h1 className="mt-3 text-2xl font-semibold sm:text-3xl">Sign in to your workspace</h1>
@@ -70,8 +72,9 @@ function LoginPage() {
             {loading ? "Signing in..." : "Continue"}
           </button>
         </form>
+        </div>
       </div>
-    </div>
+    </SafeAreaLayout>
   );
 }
 

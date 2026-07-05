@@ -36,7 +36,7 @@ function LeftSidebar() {
           <UserSearch />
         </div>
         <nav className="mt-4 space-y-3">
-          <MenuItem to="/" icon="🏠" title="Home" />
+          <MenuItem to="/home" icon="🏠" title="Home" />
           <MenuItem to="/notifications" icon="🔔" title="Notifications" badge={unreadNotifications} />
           <MenuItem to="/anonymous-mailbox" icon="📬" title="Mailbox" />
           <MenuItem to="/leaderboard" icon="🏆" title="Leaderboard" />

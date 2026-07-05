@@ -45,7 +45,7 @@ function ChampionsBoardComingSoon() {
         </p>
         <button
           type="button"
-          onClick={() => navigate("/")}
+          onClick={() => navigate("/home")}
           className="mt-7 h-11 rounded-2xl bg-[#c446ff] px-6 text-sm font-semibold text-white transition hover:bg-[#ad32e3] focus:outline-none focus:ring-2 focus:ring-[#c446ff]/60"
         >
           Return to Home

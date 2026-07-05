@@ -17,6 +17,8 @@ import MonthlyChampionsPage from "./pages/monthly_champions_page";
 import IndividualRankingPage from "./pages/individual_ranking_page";
 import ShopsPage from "./pages/shops_page";
 import ShopProfilePage from "./pages/shop_profile_page";
+import SplashScreen from "./pages/SplashScreen";
+import SafeAreaLayout from "./components/layout/SafeAreaLayout";
 import { getProfile } from "./services/profile_service";
 
 function RequireAuth({ children }) {
@@ -25,13 +27,13 @@ function RequireAuth({ children }) {
 
   if (loading) {
     return (
-      <div
+      <SafeAreaLayout
         className={`flex min-h-screen items-center justify-center ${
           isDark ? "bg-slate-950 text-slate-100" : "bg-[#f0f2f5] text-slate-700"
         }`}
       >
         Loading application...
-      </div>
+      </SafeAreaLayout>
     );
   }
 
@@ -76,13 +78,13 @@ function RequirePasswordChange({ children }) {
 
   if (mustChangePassword === null) {
     return (
-      <div
+      <SafeAreaLayout
         className={`flex min-h-screen items-center justify-center ${
           isDark ? "bg-slate-950 text-slate-100" : "bg-[#f0f2f5] text-slate-700"
         }`}
       >
         Checking account security...
-      </div>
+      </SafeAreaLayout>
     );
   }
 
@@ -131,18 +133,18 @@ function RequirePasswordChangeOnly({ children }) {
 
   if (mustChangePassword === null) {
     return (
-      <div
+      <SafeAreaLayout
         className={`flex min-h-screen items-center justify-center ${
           isDark ? "bg-slate-950 text-slate-100" : "bg-[#f0f2f5] text-slate-700"
         }`}
       >
         Checking account security...
-      </div>
+      </SafeAreaLayout>
     );
   }
 
   if (!mustChangePassword) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/home" replace />;
   }
 
   return children;
@@ -213,13 +215,13 @@ function RequireAdmin({ children }) {
 
   if (profileLoading) {
     return (
-      <div
+      <SafeAreaLayout
         className={`flex min-h-screen items-center justify-center ${
           isDark ? "bg-slate-950 text-slate-100" : "bg-[#f0f2f5] text-slate-700"
         }`}
       >
         Checking admin access...
-      </div>
+      </SafeAreaLayout>
     );
   }
 
@@ -237,6 +239,7 @@ function App() {
         <SocketProvider>
           <BrowserRouter>
             <Routes>
+              <Route path="/" element={<SplashScreen />} />
               <Route path="/login" element={<LoginPage />} />
               <Route
                 path="/change-password"
@@ -267,7 +270,6 @@ function App() {
                 <Route path="*" element={<Navigate to="/admin" replace />} />
               </Route>
               <Route
-                path="/"
                 element={
                   <RequireAuth>
                     <RequirePasswordChange>
@@ -276,18 +278,18 @@ function App() {
                   </RequireAuth>
                 }
               >
-                <Route index element={<HomePage />} />
-                <Route path="notifications" element={<NotificationsPage />} />
-                <Route path="anonymous-mailbox" element={<AnonymousMailboxPage />} />
-                <Route path="leaderboard" element={<LeaderboardPage />} />
-                <Route path="monthly-champions" element={<MonthlyChampionsPage />} />
-                <Route path="individual-ranking" element={<IndividualRankingPage />} />
-                <Route path="shops" element={<ShopsPage />} />
-                <Route path="shops/:shopId" element={<ShopProfilePage />} />
-                <Route path="profile" element={<ProfilePage />} />
-                <Route path="profile/:userId" element={<ProfilePage />} />
-                <Route path="shop/:id" element={<ShopProfilePage />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
+                <Route path="/home" element={<HomePage />} />
+                <Route path="/notifications" element={<NotificationsPage />} />
+                <Route path="/anonymous-mailbox" element={<AnonymousMailboxPage />} />
+                <Route path="/leaderboard" element={<LeaderboardPage />} />
+                <Route path="/monthly-champions" element={<MonthlyChampionsPage />} />
+                <Route path="/individual-ranking" element={<IndividualRankingPage />} />
+                <Route path="/shops" element={<ShopsPage />} />
+                <Route path="/shops/:shopId" element={<ShopProfilePage />} />
+                <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/profile/:userId" element={<ProfilePage />} />
+                <Route path="/shop/:id" element={<ShopProfilePage />} />
+                <Route path="*" element={<Navigate to="/home" replace />} />
               </Route>
             </Routes>
           </BrowserRouter>

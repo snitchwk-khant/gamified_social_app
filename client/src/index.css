@@ -1,5 +1,53 @@
 @import "tailwindcss";
 
+html,
+body,
+#root {
+  min-height: 100%;
+  background: #0b1026;
+}
+
+:root {
+  --safe-area-inset-top: env(safe-area-inset-top, 0px);
+  --safe-area-inset-right: env(safe-area-inset-right, 0px);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-inset-left: env(safe-area-inset-left, 0px);
+}
+
+body {
+  overflow-x: hidden;
+}
+
+.safe-area-layout {
+  box-sizing: border-box;
+  padding-top: var(--safe-area-inset-top);
+  padding-right: var(--safe-area-inset-right);
+  padding-bottom: var(--safe-area-inset-bottom);
+  padding-left: var(--safe-area-inset-left);
+}
+
+.safe-area-layout--vertical {
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.safe-area-layout--horizontal {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.safe-area-layout--top {
+  padding-right: 0;
+  padding-bottom: 0;
+  padding-left: 0;
+}
+
+.safe-area-layout--bottom {
+  padding-top: 0;
+  padding-right: 0;
+  padding-left: 0;
+}
+
 @keyframes leaderboard-flame-flicker {
   0%,
   100% {

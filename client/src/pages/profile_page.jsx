@@ -1295,14 +1295,14 @@ function PersonalProfile({
 
       {activeViewerImage ? (
         <div
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/95 p-4"
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/95 pb-[calc(1rem+var(--safe-area-inset-bottom))] pl-[calc(1rem+var(--safe-area-inset-left))] pr-[calc(1rem+var(--safe-area-inset-right))] pt-[calc(1rem+var(--safe-area-inset-top))]"
           onClick={handleCloseViewer}
         >
           <button
             type="button"
             aria-label="Close album viewer"
             onClick={handleCloseViewer}
-            className="absolute right-4 top-4 rounded-full border border-white/40 bg-black/40 px-4 py-2 text-sm font-semibold text-white"
+            className="absolute right-[calc(1rem+var(--safe-area-inset-right))] top-[calc(1rem+var(--safe-area-inset-top))] rounded-full border border-white/40 bg-black/40 px-4 py-2 text-sm font-semibold text-white"
           >
             Close
           </button>
@@ -1315,7 +1315,7 @@ function PersonalProfile({
                   event.stopPropagation();
                   handlePreviousViewerImage();
                 }}
-                className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full border border-white/40 bg-black/40 px-4 py-3 text-sm font-semibold text-white"
+                className="absolute left-[calc(1rem+var(--safe-area-inset-left))] top-1/2 -translate-y-1/2 rounded-full border border-white/40 bg-black/40 px-4 py-3 text-sm font-semibold text-white"
               >
                 Previous
               </button>
@@ -1325,7 +1325,7 @@ function PersonalProfile({
                   event.stopPropagation();
                   handleNextViewerImage();
                 }}
-                className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full border border-white/40 bg-black/40 px-4 py-3 text-sm font-semibold text-white"
+                className="absolute right-[calc(1rem+var(--safe-area-inset-right))] top-1/2 -translate-y-1/2 rounded-full border border-white/40 bg-black/40 px-4 py-3 text-sm font-semibold text-white"
               >
                 Next
               </button>

@@ -55,7 +55,7 @@ function AdminSidebar({ isOpen, onClose }) {
         onClick={onClose}
       />
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-slate-200 bg-white p-5 transition-transform duration-200 lg:static lg:z-auto lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-slate-200 bg-white pb-[calc(1.25rem+var(--safe-area-inset-bottom))] pl-[calc(1.25rem+var(--safe-area-inset-left))] pr-5 pt-[calc(1.25rem+var(--safe-area-inset-top))] transition-transform duration-200 lg:static lg:z-auto lg:translate-x-0 lg:p-5 ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >

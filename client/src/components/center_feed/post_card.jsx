@@ -369,7 +369,7 @@ function FeedImageCarousel({ urls, isDark }) {
 
       {viewerOpen ? (
         <div
-          className="fixed inset-0 z-50 flex animate-[profile-view-in_180ms_ease-out] items-center justify-center bg-black/95 px-4 py-6"
+          className="fixed inset-0 z-50 flex animate-[profile-view-in_180ms_ease-out] items-center justify-center bg-black/95 pb-[calc(1.5rem+var(--safe-area-inset-bottom))] pl-[calc(1rem+var(--safe-area-inset-left))] pr-[calc(1rem+var(--safe-area-inset-right))] pt-[calc(1.5rem+var(--safe-area-inset-top))]"
           onTouchStart={handleTouchStart}
           onTouchEnd={(event) => handleTouchEnd(event, true)}
         >
@@ -377,7 +377,7 @@ function FeedImageCarousel({ urls, isDark }) {
             type="button"
             onClick={() => setViewerOpen(false)}
             aria-label="Close image viewer"
-            className={`absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full text-2xl font-semibold leading-none transition ${
+            className={`absolute right-[calc(1rem+var(--safe-area-inset-right))] top-[calc(1rem+var(--safe-area-inset-top))] flex h-11 w-11 items-center justify-center rounded-full text-2xl font-semibold leading-none transition ${
               isDark ? "bg-slate-950/80 text-slate-100 hover:bg-slate-950" : "bg-white/90 text-slate-900 hover:bg-white"
             }`}
           >
@@ -1227,7 +1227,7 @@ function PostCard({
               />
             </div>
 
-            <div className={`relative z-10 shrink-0 border-t px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 ${isDark ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-white"}`}>
+            <div className={`relative z-10 shrink-0 border-t px-4 pb-[calc(1rem+var(--safe-area-inset-bottom))] pt-3 ${isDark ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-white"}`}>
               <CommentForm
                 onSubmit={(content, isAnonymous) => handleCommentSubmit(content, isAnonymous, null)}
                 mentionUsers={mentionUsers}

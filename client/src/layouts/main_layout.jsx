@@ -170,7 +170,7 @@ function MainLayout() {
 
   const handleCloseHighlights = () => {
     setShowHighlights(false);
-    navigate("/");
+    navigate("/home");
   };
 
   const handleViewLeaderboard = () => {

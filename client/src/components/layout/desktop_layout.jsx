@@ -1,5 +1,6 @@
 import { useTheme } from "../../context/theme_context";
 import { NavLink } from "react-router-dom";
+import SafeAreaLayout from "./SafeAreaLayout";
 
 const MOBILE_NAV_ITEMS = [
   { label: "Home", icon: "🏠", to: "/" },
@@ -12,7 +13,7 @@ function DesktopLayout({ left, center, right }) {
   const { isDark } = useTheme();
 
   return (
-    <div className={`min-h-screen overflow-x-hidden ${isDark ? "bg-slate-950 text-slate-100" : "bg-[#f0f2f5] text-slate-800"}`}>
+    <SafeAreaLayout className={`min-h-screen overflow-x-hidden ${isDark ? "bg-slate-950 text-slate-100" : "bg-[#f0f2f5] text-slate-800"}`}>
       <div className="mx-auto grid min-h-screen w-full max-w-[1460px] grid-cols-1 gap-5 overflow-visible px-3 pb-24 pt-3 sm:px-4 sm:pt-4 xl:h-screen xl:grid-cols-[280px_minmax(0,1fr)_320px] xl:overflow-hidden xl:px-6 xl:pb-4">
         <aside className="hidden min-h-0 flex-col gap-6 xl:flex">
           {left}
@@ -34,7 +35,7 @@ function DesktopLayout({ left, center, right }) {
       </div>
 
       <nav
-        className={`fixed inset-x-0 bottom-0 z-50 border-t px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur-xl xl:hidden ${
+        className={`fixed inset-x-0 bottom-0 z-50 border-t pb-[max(var(--safe-area-inset-bottom),0.5rem)] pl-[max(var(--safe-area-inset-left),0.5rem)] pr-[max(var(--safe-area-inset-right),0.5rem)] pt-2 backdrop-blur-xl xl:hidden ${
           isDark ? "border-white/10 bg-slate-950/90" : "border-slate-200 bg-white/90"
         }`}
       >
@@ -61,7 +62,7 @@ function DesktopLayout({ left, center, right }) {
           ))}
         </div>
       </nav>
-    </div>
+    </SafeAreaLayout>
   );
 }
 
