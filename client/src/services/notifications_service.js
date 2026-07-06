@@ -68,7 +68,15 @@ function normalizeNotification(row) {
     ...row,
     id: row?.id,
     user_id: row?.user_id || row?.recipient_id || null,
+    actor_id: row?.actor_id || row?.created_by || null,
     created_by: row?.created_by || null,
+    post_id: row?.post_id || row?.metadata?.post_id || null,
+    comment_id: row?.comment_id || row?.metadata?.comment_id || null,
+    shop_id: row?.shop_id || row?.metadata?.shop_id || null,
+    message_id: row?.message_id || row?.metadata?.message_id || null,
+    rank: row?.rank || row?.metadata?.rank || null,
+    month: row?.month || row?.metadata?.month || null,
+    year: row?.year || row?.metadata?.year || null,
     type: row?.type || category,
     category,
     title: row?.title || row?.subject || "Notification",
@@ -85,6 +93,47 @@ function normalizeNotification(row) {
     created_at: createdAt,
     updated_at: updatedAt,
   };
+}
+
+export function getNotificationActionUrl(item) {
+  if (item?.metadata?.action_url) {
+    return item.metadata.action_url;
+  }
+
+  if (item?.type === "shop_rank_increased") {
+    return "/leaderboard";
+  }
+
+  if (item?.type === "monthly_target_completed") {
+    return "/monthly-champions";
+  }
+
+  if (item?.type === "direct_message") {
+    const conversationId = item?.metadata?.conversation_id || item?.metadata?.sender_id || item?.actor_id || "";
+    const params = new URLSearchParams();
+
+    if (conversationId) {
+      params.set("conversation", conversationId);
+    }
+
+    return `/anonymous-mailbox${params.toString() ? `?${params.toString()}` : ""}`;
+  }
+
+  if (!item?.post_id) {
+    return "";
+  }
+
+  const params = new URLSearchParams({ post: item.post_id });
+
+  if (item.type === "post_comment" || item.type === "comment_reply") {
+    params.set("comments", "1");
+  }
+
+  if (item.comment_id) {
+    params.set("comment", item.comment_id);
+  }
+
+  return `/home?${params.toString()}`;
 }
 
 async function fetchByRecipientColumn(columnName, userId, fields = NOTIFICATION_FIELDS) {
@@ -429,6 +478,25 @@ export async function createNotification(payload) {
   return { data: data ? normalizeNotification(data) : null, error };
 }
 
+export async function createSocialNotification({ recipientId, type, postId, commentId = null }) {
+  if (!recipientId || !type || !postId) {
+    return { data: null, error: new Error("Missing social notification fields.") };
+  }
+
+  const { data, error } = await supabase.rpc("create_social_notification", {
+    target_user_id: recipientId,
+    notification_type: type,
+    source_post_id: postId,
+    source_comment_id: commentId,
+  });
+
+  if (error) {
+    logSupabaseError("createSocialNotification Error", error);
+  }
+
+  return { data, error };
+}
+
 export async function createAdminNotifications({
   title,
   message,
@@ -633,6 +701,8 @@ export default {
   refreshUnreadNotificationCount,
   subscribeToUnreadNotificationCount,
   createNotification,
+  createSocialNotification,
+  getNotificationActionUrl,
   createAdminNotifications,
   getAdminNotificationGroups,
   deleteAdminNotificationGroup,

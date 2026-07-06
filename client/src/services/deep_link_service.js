@@ -83,6 +83,16 @@ export function resolveDeepLink(input) {
           : { isValid: false, path: HOME_PATH, reason: "missing_post_id", url: normalizedUrl };
       case "leaderboard":
         return { isValid: true, path: "/leaderboard", url: normalizedUrl };
+      case "monthly-result":
+      case "monthly-results":
+      case "monthly-champions":
+        return { isValid: true, path: "/monthly-champions", url: normalizedUrl };
+      case "conversation":
+      case "messages":
+        if (isValidId(id)) {
+          return { isValid: true, path: `/anonymous-mailbox?conversation=${encodeURIComponent(id)}`, url: normalizedUrl };
+        }
+        return { isValid: true, path: "/anonymous-mailbox", url: normalizedUrl };
       case "shop-target":
         return { isValid: true, path: "/admin/sales-targets", url: normalizedUrl };
       case "notifications":

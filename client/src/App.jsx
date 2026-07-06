@@ -21,6 +21,8 @@ import SplashScreen from "./pages/SplashScreen";
 import SafeAreaLayout from "./components/layout/SafeAreaLayout";
 import NetworkBanner from "./components/network/NetworkBanner";
 import OfflineScreen from "./components/network/OfflineScreen";
+import NativePushBridge from "./components/notifications/NativePushBridge";
+import NotificationBanner from "./components/notifications/NotificationBanner";
 import useNetwork from "./hooks/useNetwork";
 import useDeepLink from "./hooks/useDeepLink";
 import { getProfile } from "./services/profile_service";
@@ -267,6 +269,8 @@ function App() {
           <NetworkShell>
             <BrowserRouter>
               <DeepLinkBridge />
+              <NativePushBridge />
+              <NotificationBanner />
               <Routes>
                 <Route path="/" element={<SplashScreen />} />
                 <Route path="/login" element={<LoginPage />} />

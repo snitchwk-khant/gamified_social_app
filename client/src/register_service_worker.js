@@ -1,7 +1,9 @@
+import { Capacitor } from "@capacitor/core";
+
 export function registerServiceWorker() {
   const isHttpApp = ["http:", "https:"].includes(window.location.protocol);
 
-  if (!("serviceWorker" in navigator) || !import.meta.env.PROD || !isHttpApp) {
+  if (Capacitor.isNativePlatform?.() || !("serviceWorker" in navigator) || !import.meta.env.PROD || !isHttpApp) {
     return;
   }
 

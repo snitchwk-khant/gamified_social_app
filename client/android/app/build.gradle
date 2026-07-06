@@ -44,11 +44,12 @@ dependencies {
 
 apply from: 'capacitor.build.gradle'
 
-try {
-    def servicesJSON = file('google-services.json')
-    if (servicesJSON.text) {
-        apply plugin: 'com.google.gms.google-services'
-    }
-} catch(Exception e) {
-    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+def googleServicesJson = file('google-services.json')
+def hasGoogleServicesJson = googleServicesJson.exists() && googleServicesJson.length() > 0
+
+if (hasGoogleServicesJson) {
+    logger.lifecycle("google-services.json detected. Applying Google Services plugin for Firebase Cloud Messaging.")
+    apply plugin: 'com.google.gms.google-services'
+} else {
+    logger.lifecycle("google-services.json not found. Android build remains valid, but Firebase Cloud Messaging token registration will not work until client/android/app/google-services.json is added.")
 }

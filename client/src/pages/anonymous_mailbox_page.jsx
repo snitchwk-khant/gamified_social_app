@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useTheme } from "../context/theme_context";
 import {
   createAnonymousMailboxMessage,
@@ -18,12 +19,20 @@ const MESSAGE_TABS = [
 
 function AnonymousMailboxPage() {
   const { isDark } = useTheme();
-  const [activeTab, setActiveTab] = useState("mailbox");
+  const [searchParams] = useSearchParams();
+  const conversationId = searchParams.get("conversation");
+  const [activeTab, setActiveTab] = useState(conversationId ? "gemify-room" : "mailbox");
   const [form, setForm] = useState(DEFAULT_FORM);
   const [formErrors, setFormErrors] = useState({});
   const [formError, setFormError] = useState("");
   const [notice, setNotice] = useState("");
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (conversationId) {
+      setActiveTab("gemify-room");
+    }
+  }, [conversationId]);
 
   const updateForm = (field, value) => {
     setForm((current) => ({

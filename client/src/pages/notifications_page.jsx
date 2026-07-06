@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useTheme } from "../context/theme_context";
 import {
   getMyNotificationsResult,
+  getNotificationActionUrl,
   markAllNotificationsRead,
   markNotificationRead,
   subscribeToMyNotifications,
@@ -13,6 +14,7 @@ const FILTERS = [
   { id: "all", label: "All" },
   { id: "unread", label: "Unread" },
   { id: "Achievement", label: "Achievements" },
+  { id: "Social", label: "Social" },
   { id: "Announcement", label: "Announcements" },
   { id: "Reward", label: "Rewards" },
 ];
@@ -22,6 +24,7 @@ const CATEGORY_STYLES = {
   Achievement: { icon: "🏆", label: "Achievement" },
   Reward: { icon: "🎁", label: "Reward" },
   System: { icon: "⚙️", label: "System" },
+  Social: { icon: "💬", label: "Social" },
   Warning: { icon: "⚠️", label: "Warning" },
   Sales: { icon: "📈", label: "Sales" },
   Leaderboard: { icon: "🏅", label: "Leaderboard" },
@@ -179,7 +182,7 @@ function NotificationsPage() {
   };
 
   const handleAction = (item) => {
-    const actionUrl = item?.metadata?.action_url;
+    const actionUrl = getNotificationActionUrl(item);
 
     if (actionUrl) {
       navigate(actionUrl);
@@ -386,7 +389,7 @@ function NotificationsPage() {
             </p>
 
             <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
-              {selectedNotification.metadata?.action_url ? (
+              {getNotificationActionUrl(selectedNotification) ? (
                 <button
                   type="button"
                   onClick={() => handleAction(selectedNotification)}

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { getProfile } from "../services/profile_service";
+import { deactivateNativePushInstallation } from "../services/native_push_service";
 
 const AuthContext = createContext(null);
 
@@ -182,6 +183,7 @@ export function AuthProvider({ children }) {
       },
 
       signOut: async () => {
+        await deactivateNativePushInstallation();
         await supabase.auth.signOut();
         setUser(null);
       },

@@ -32,6 +32,9 @@ function FeedWidget({
   onRetryAnnouncements,
   onDeletePost,
   onReactionUpdated,
+  focusedPostId = "",
+  focusedCommentId = "",
+  shouldOpenFocusedComments = false,
 }) {
   const { isDark } = useTheme();
   const visibleAnnouncements = announcements.filter((item) => {
@@ -118,6 +121,9 @@ function FeedWidget({
         onCommentCreated={onCommentCreated}
         onDeletePost={onDeletePost}
         onReactionUpdated={onReactionUpdated}
+        focusedPostId={focusedPostId}
+        focusedCommentId={focusedCommentId}
+        shouldOpenFocusedComments={shouldOpenFocusedComments}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../context/auth_context";
 import { useTheme } from "../../context/theme_context";
 import { getProfilePath } from "../../utils/profile_path";
@@ -45,13 +45,14 @@ function renderCommentContent(content, isDark) {
     });
 }
 
-function CommentList({ comments, loading, onDeleteComment, onReplyComment, replyingToCommentId, renderReplyForm }) {
+function CommentList({ comments, loading, onDeleteComment, onReplyComment, replyingToCommentId, focusedCommentId = "", renderReplyForm }) {
   const { user } = useAuth();
   const { isDark } = useTheme();
   const [activeMenuCommentId, setActiveMenuCommentId] = useState("");
   const [confirmDeleteComment, setConfirmDeleteComment] = useState(null);
   const [deletingCommentId, setDeletingCommentId] = useState("");
   const [deleteError, setDeleteError] = useState("");
+  const commentRefs = useRef({});
   const rootComments = comments.filter((comment) => !comment.parent_comment_id);
   const repliesByParent = comments.reduce((groupedReplies, comment) => {
     if (!comment.parent_comment_id) {
@@ -63,6 +64,19 @@ function CommentList({ comments, loading, onDeleteComment, onReplyComment, reply
       [comment.parent_comment_id]: [...(groupedReplies[comment.parent_comment_id] || []), comment],
     };
   }, {});
+
+  useEffect(() => {
+    if (!focusedCommentId || loading) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      commentRefs.current[focusedCommentId]?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
+  }, [focusedCommentId, loading, comments.length]);
 
   if (loading) {
     return <p className={`text-sm ${isDark ? "text-slate-400" : "text-slate-500"}`}>Loading comments...</p>;
@@ -96,7 +110,16 @@ function CommentList({ comments, loading, onDeleteComment, onReplyComment, reply
         return (
           <div
             key={comment.id}
-            className={`flex items-start gap-3 ${isReply ? "ml-8" : ""}`}
+            ref={(node) => {
+              if (node) {
+                commentRefs.current[comment.id] = node;
+              } else {
+                delete commentRefs.current[comment.id];
+              }
+            }}
+            className={`flex items-start gap-3 rounded-2xl transition ${
+              focusedCommentId === comment.id ? (isDark ? "bg-[#c446ff]/10" : "bg-[#f6e8ff]") : ""
+            } ${isReply ? "ml-8" : ""}`}
           >
             {avatarSrc ? (
               profilePath ? (

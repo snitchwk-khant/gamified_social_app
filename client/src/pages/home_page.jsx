@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback, useRef } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/auth_context";
 import * as postService from "../services/post_service";
 import * as storiesService from "../services/stories_service";
@@ -109,8 +109,12 @@ function getLatestStoryCards(stories) {
 function HomePage() {
   const { user } = useAuth();
   const { isDark } = useTheme();
+  const location = useLocation();
   const storyInputRef = useRef(null);
   const storiesRequestRef = useRef(0);
+  const focusedPostId = useMemo(() => new URLSearchParams(location.search).get("post") || "", [location.search]);
+  const focusedCommentId = useMemo(() => new URLSearchParams(location.search).get("comment") || "", [location.search]);
+  const shouldOpenFocusedComments = useMemo(() => new URLSearchParams(location.search).get("comments") === "1", [location.search]);
 
   const [draft, setDraft] = useState("");
   const [posts, setPosts] = useState([]);
@@ -916,6 +920,9 @@ function HomePage() {
         onRetryAnnouncements={loadAnnouncements}
         onDeletePost={handleDeletePost}
         onReactionUpdated={handlePostReactionUpdated}
+        focusedPostId={focusedPostId}
+        focusedCommentId={focusedCommentId}
+        shouldOpenFocusedComments={shouldOpenFocusedComments}
       />
 
       <StoryViewer

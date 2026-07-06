@@ -5,6 +5,7 @@ import { useTheme } from "../../context/theme_context";
 import { supabase } from "../../lib/supabase";
 import { errorNotification, lightImpact, mediumImpact } from "../../services/haptics";
 import NetworkService from "../../services/network_service";
+import { createSocialNotification } from "../../services/notifications_service";
 import {
   getPostLoves,
   getPostReactionSummary,
@@ -442,6 +443,8 @@ function PostCard({
   onCommentCreated,
   onDeletePost,
   onReactionUpdated,
+  initialCommentOpen = false,
+  focusedCommentId = "",
 }) {
   const { user } = useAuth();
   const { isDark } = useTheme();
@@ -473,6 +476,12 @@ function PostCard({
   useEffect(() => {
     setCommentCount(commentsCount);
   }, [commentsCount, id]);
+
+  useEffect(() => {
+    if (initialCommentOpen) {
+      setCommentOpen(true);
+    }
+  }, [initialCommentOpen]);
 
   useEffect(() => {
     if (!commentOpen || typeof window === "undefined") {
@@ -752,22 +761,62 @@ function PostCard({
     }
   }
 
-  async function notifyCommentRecipients(content, insertedComment, parentComment = null) {
+  async function createPostInteractionNotification({ targetUserId, type, commentId = null }) {
+    if (!targetUserId || targetUserId === user?.id) {
+      return;
+    }
+
+    const { error } = await createSocialNotification({
+      recipientId: targetUserId,
+      type,
+      postId: id,
+      commentId,
+    });
+
+    if (error) {
+      console.error("Create Social Notification Error:", {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        error,
+      });
+    }
+  }
+
+  async function notifyCommentRecipients(content, commentId) {
     const recipientIds = new Map();
 
     getMentionedUserIds(content).forEach((recipientId) => {
       recipientIds.set(recipientId, "You were mentioned in a comment.");
     });
 
-    if (parentComment?.user_id && !recipientIds.has(parentComment.user_id)) {
-      recipientIds.set(parentComment.user_id, "Someone replied to your comment.");
-    }
-
     await Promise.all(
       Array.from(recipientIds.entries()).map(([recipientId, title]) =>
-        createCommentNotification(recipientId, title, content, insertedComment.id)
+        createCommentNotification(recipientId, title, content, commentId)
       )
     );
+  }
+
+  async function notifyPostCommentInteraction(insertedComment, parentComment = null) {
+    if (!insertedComment?.id) {
+      return;
+    }
+
+    if (parentComment?.user_id) {
+      await createPostInteractionNotification({
+        targetUserId: parentComment.user_id,
+        type: "comment_reply",
+        commentId: insertedComment.id,
+      });
+      return;
+    }
+
+    await createPostInteractionNotification({
+      targetUserId: authorUserId,
+      type: "post_comment",
+      commentId: insertedComment.id,
+    });
   }
 
   async function handleCommentSubmit(content, isAnonymous = false, parentCommentId = null) {
@@ -818,7 +867,10 @@ function PostCard({
       onCommentCreated(id);
     }
 
-    await notifyCommentRecipients(trimmedContent, data, parentComment);
+    await Promise.all([
+      notifyPostCommentInteraction(data, parentComment),
+      notifyCommentRecipients(trimmedContent, data.id),
+    ]);
 
     return true;
   }
@@ -890,7 +942,7 @@ function PostCard({
     const nextLoveCount = Math.max(0, currentLoveCount + (nextLoved ? 1 : -1));
 
     try {
-      const { error, summary } = await NetworkService.enqueue(() => setPostReaction(id, "love"));
+      const { data, error, summary } = await NetworkService.enqueue(() => setPostReaction(id, "love"));
 
       if (error) {
         errorNotification();
@@ -911,6 +963,13 @@ function PostCard({
       if (nextLoved) {
         setLoveAnimating(true);
         setTimeout(() => setLoveAnimating(false), 260);
+      }
+
+      if (data?.id) {
+        await createPostInteractionNotification({
+          targetUserId: authorUserId,
+          type: "post_reaction",
+        });
       }
     } finally {
       setLoveToggling(false);
@@ -1258,6 +1317,7 @@ function PostCard({
                 onDeleteComment={handleDeleteComment}
                 onReplyComment={setReplyingToComment}
                 replyingToCommentId={replyingToComment?.id || ""}
+                focusedCommentId={focusedCommentId}
                 renderReplyForm={(comment) => (
                   <CommentForm
                     onSubmit={(content, isAnonymous) => handleCommentSubmit(content, isAnonymous, comment.id)}
