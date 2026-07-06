@@ -1276,10 +1276,10 @@ function PostCard({
       ) : null}
 
       {commentOpen ? (
-        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50 sm:items-end">
+        <div className="fixed inset-0 z-[70] flex items-end justify-center overflow-hidden bg-black/50 sm:items-end">
           <div
             style={{
-              "--comment-sheet-mobile-height": "min(88dvh, calc(100dvh - var(--safe-area-inset-top) - 0.5rem))",
+              "--comment-sheet-mobile-height": "min(88dvh, calc(100dvh - var(--safe-area-inset-top) - var(--safe-area-inset-bottom) - 0.5rem))",
               transform: commentSheetKeyboardOffset ? `translate3d(0, -${commentSheetKeyboardOffset}px, 0)` : undefined,
             }}
             className={`flex h-[var(--comment-sheet-mobile-height)] max-h-[var(--comment-sheet-mobile-height)] w-full animate-[profile-view-in_180ms_ease-out] flex-col overflow-hidden rounded-t-[28px] border shadow-2xl transition-transform duration-150 sm:h-auto sm:max-h-[80vh] ${
@@ -1330,7 +1330,7 @@ function PostCard({
               />
             </div>
 
-            <div className={`relative z-10 shrink-0 border-t px-4 pb-[calc(1rem+var(--safe-area-inset-bottom))] pt-3 ${isDark ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-white"}`}>
+            <div className={`sticky bottom-0 z-10 shrink-0 border-t px-4 pb-[calc(1rem+var(--safe-area-inset-bottom))] pt-3 ${isDark ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-white"}`}>
               <CommentForm
                 onSubmit={(content, isAnonymous) => handleCommentSubmit(content, isAnonymous, null)}
                 mentionUsers={mentionUsers}
