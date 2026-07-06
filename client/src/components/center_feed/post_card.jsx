@@ -462,6 +462,7 @@ function PostCard({
   const [hasLoved, setHasLoved] = useState(Boolean(userReaction));
   const [loveToggling, setLoveToggling] = useState(false);
   const [loveAnimating, setLoveAnimating] = useState(false);
+  const [commentSheetKeyboardOffset, setCommentSheetKeyboardOffset] = useState(0);
   const commentSheetTouchStartYRef = useRef(null);
   const maskedAvatarPath = "/masked-avatar.jpg";
   const canDelete = Boolean(user?.id && authorUserId === user.id);
@@ -472,6 +473,36 @@ function PostCard({
   useEffect(() => {
     setCommentCount(commentsCount);
   }, [commentsCount, id]);
+
+  useEffect(() => {
+    if (!commentOpen || typeof window === "undefined") {
+      setCommentSheetKeyboardOffset(0);
+      return undefined;
+    }
+
+    const visualViewport = window.visualViewport;
+
+    function updateKeyboardOffset() {
+      if (!visualViewport || window.matchMedia("(min-width: 640px)").matches) {
+        setCommentSheetKeyboardOffset(0);
+        return;
+      }
+
+      const keyboardOffset = Math.max(0, window.innerHeight - visualViewport.height - visualViewport.offsetTop);
+      setCommentSheetKeyboardOffset(Math.round(keyboardOffset));
+    }
+
+    updateKeyboardOffset();
+    visualViewport?.addEventListener("resize", updateKeyboardOffset);
+    visualViewport?.addEventListener("scroll", updateKeyboardOffset);
+    window.addEventListener("orientationchange", updateKeyboardOffset);
+
+    return () => {
+      visualViewport?.removeEventListener("resize", updateKeyboardOffset);
+      visualViewport?.removeEventListener("scroll", updateKeyboardOffset);
+      window.removeEventListener("orientationchange", updateKeyboardOffset);
+    };
+  }, [commentOpen]);
 
   useEffect(() => {
     setCurrentLoveCount(Number(reactionsCount ?? likeCount ?? 0));
@@ -1186,9 +1217,13 @@ function PostCard({
       ) : null}
 
       {commentOpen ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-end">
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50 sm:items-end">
           <div
-            className={`flex max-h-[80vh] w-full animate-[profile-view-in_180ms_ease-out] flex-col overflow-hidden rounded-t-[28px] border shadow-2xl ${
+            style={{
+              "--comment-sheet-mobile-height": "min(88dvh, calc(100dvh - var(--safe-area-inset-top) - 0.5rem))",
+              transform: commentSheetKeyboardOffset ? `translate3d(0, -${commentSheetKeyboardOffset}px, 0)` : undefined,
+            }}
+            className={`flex h-[var(--comment-sheet-mobile-height)] max-h-[var(--comment-sheet-mobile-height)] w-full animate-[profile-view-in_180ms_ease-out] flex-col overflow-hidden rounded-t-[28px] border shadow-2xl transition-transform duration-150 sm:h-auto sm:max-h-[80vh] ${
               isDark ? "border-slate-800 bg-slate-950 text-slate-100" : "border-slate-200 bg-white text-slate-950"
             }`}
             onTouchStart={handleCommentSheetTouchStart}
@@ -1216,7 +1251,7 @@ function PostCard({
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5">
               <CommentList
                 comments={comments}
                 loading={loadingComments}

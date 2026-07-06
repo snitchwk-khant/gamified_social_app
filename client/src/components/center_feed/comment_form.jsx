@@ -132,9 +132,15 @@ function CommentForm({ onSubmit, initialContent = "", placeholder = "Write a com
     setMentionToken(null);
   };
 
+  function stopComposerTouchPropagation(event) {
+    event.stopPropagation();
+  }
+
   return (
     <form
       onSubmit={handleSubmit}
+      onTouchStart={stopComposerTouchPropagation}
+      onTouchEnd={stopComposerTouchPropagation}
       className="space-y-3"
     >
       <div className="flex items-center gap-3">
@@ -210,6 +216,8 @@ function CommentForm({ onSubmit, initialContent = "", placeholder = "Write a com
             onKeyUp={(event) => updateMentionTokenFromInput(event.currentTarget)}
             onClick={(event) => updateMentionTokenFromInput(event.currentTarget)}
             type="text"
+            enterKeyHint="send"
+            autoComplete="off"
             placeholder={placeholder}
             className={`h-11 w-full rounded-full border px-4 text-sm outline-none transition ${
               isDark
@@ -223,6 +231,7 @@ function CommentForm({ onSubmit, initialContent = "", placeholder = "Write a com
           type="submit"
           disabled={submitting}
           aria-label="Send comment"
+          onMouseDown={(event) => event.preventDefault()}
           className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-lg font-semibold transition ${
             submitting
               ? `cursor-not-allowed ${isDark ? "bg-slate-700 text-slate-300" : "bg-slate-400 text-white"}`
