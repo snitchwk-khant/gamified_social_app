@@ -56,6 +56,55 @@ function formatNotificationTime(value) {
   });
 }
 
+function getInitials(profile) {
+  const source = profile?.full_name || profile?.email || "User";
+
+  return source
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+}
+
+function NotificationIcon({ item, categoryInfo, isDark }) {
+  const actor = item?.actor;
+
+  if (actor?.avatar_url) {
+    return (
+      <img
+        src={actor.avatar_url}
+        alt=""
+        className={`h-11 w-11 shrink-0 rounded-2xl object-cover ${
+          isDark ? "bg-slate-900" : "bg-[#f6e8ff]"
+        }`}
+      />
+    );
+  }
+
+  if (actor) {
+    return (
+      <span
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-sm font-bold ${
+          isDark ? "bg-slate-900 text-slate-100" : "bg-[#f6e8ff] text-[#8f29c8]"
+        }`}
+      >
+        {getInitials(actor)}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-xl ${
+        isDark ? "bg-slate-900" : "bg-[#f6e8ff]"
+      }`}
+    >
+      {categoryInfo.icon}
+    </span>
+  );
+}
+
 function NotificationsPage() {
   const { isDark } = useTheme();
   const navigate = useNavigate();
@@ -282,9 +331,7 @@ function NotificationsPage() {
                 }`}
               >
                 <div className="flex items-start gap-3">
-                  <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-xl ${isDark ? "bg-slate-900" : "bg-[#f6e8ff]"}`}>
-                    {categoryInfo.icon}
-                  </span>
+                  <NotificationIcon item={item} categoryInfo={categoryInfo} isDark={isDark} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">

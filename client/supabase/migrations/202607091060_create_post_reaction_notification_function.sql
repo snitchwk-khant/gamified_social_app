@@ -1,5 +1,3 @@
-begin;
-
 create or replace function public.create_post_reaction_notification()
 returns trigger
 language plpgsql
@@ -71,7 +69,3 @@ begin
   return new;
 end;
 $$;
-
-select pg_notify('pgrst', 'reload schema');
-
-commit;

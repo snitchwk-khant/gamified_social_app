@@ -63,6 +63,9 @@ function normalizeNotification(row) {
   const readAt = row?.read_at || null;
   const category = row?.category || row?.type || row?.notification_type || CATEGORY_FALLBACK;
   const message = row?.message || row?.body || row?.content || "";
+  const entityType = row?.entity_type || row?.metadata?.entity_type || null;
+  const entityId = row?.entity_id || row?.metadata?.entity_id || null;
+  const postId = row?.post_id || row?.metadata?.post_id || (entityType === "post" ? entityId : null);
 
   return {
     ...row,
@@ -70,7 +73,9 @@ function normalizeNotification(row) {
     user_id: row?.user_id || row?.recipient_id || null,
     actor_id: row?.actor_id || row?.created_by || null,
     created_by: row?.created_by || null,
-    post_id: row?.post_id || row?.metadata?.post_id || null,
+    entity_type: entityType,
+    entity_id: entityId,
+    post_id: postId,
     comment_id: row?.comment_id || row?.metadata?.comment_id || null,
     shop_id: row?.shop_id || row?.metadata?.shop_id || null,
     message_id: row?.message_id || row?.metadata?.message_id || null,
@@ -98,6 +103,10 @@ function normalizeNotification(row) {
 export function getNotificationActionUrl(item) {
   if (item?.metadata?.action_url) {
     return item.metadata.action_url;
+  }
+
+  if (item?.type === "post_reaction" && item?.entity_type === "post" && item?.entity_id) {
+    return `/home?${new URLSearchParams({ post: item.entity_id }).toString()}`;
   }
 
   if (item?.type === "shop_rank_increased") {
@@ -136,16 +145,20 @@ export function getNotificationActionUrl(item) {
   return `/home?${params.toString()}`;
 }
 
-async function fetchByRecipientColumn(columnName, userId, fields = NOTIFICATION_FIELDS) {
-  return supabase
+async function fetchByRecipientColumn(columnName, userId, fields = NOTIFICATION_FIELDS, options = {}) {
+  let query = supabase
     .from("notifications")
     .select(fields)
-    .eq(columnName, userId)
-    .eq("is_published", true)
-    .order("created_at", { ascending: false });
+    .eq(columnName, userId);
+
+  if (options.filterPublished !== false) {
+    query = query.eq("is_published", true);
+  }
+
+  return query.order("created_at", { ascending: false });
 }
 
-async function fetchMyNotificationRows(userId, fields = NOTIFICATION_FIELDS) {
+async function fetchMyNotificationRows(userId, fields = NOTIFICATION_FIELDS, options = {}) {
   const shopId = await getUserShopId(userId);
 
   const filters = [
@@ -158,20 +171,29 @@ async function fetchMyNotificationRows(userId, fields = NOTIFICATION_FIELDS) {
     filters.push(`and(recipient_type.eq.shop,recipient_id.eq.${shopId})`);
   }
 
-  return supabase
+  let query = supabase
     .from("notifications")
     .select(fields)
-    .or(filters.join(","))
-    .eq("is_published", true)
-    .order("created_at", { ascending: false });
+    .or(filters.join(","));
+
+  if (options.filterPublished !== false) {
+    query = query.eq("is_published", true);
+  }
+
+  return query.order("created_at", { ascending: false });
 }
 
 async function getUserShopId(userId) {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("profiles")
     .select("shop_id")
     .eq("id", userId)
     .maybeSingle();
+
+  if (error) {
+    logSupabaseError("getUserShopId Error", error);
+    return null;
+  }
 
   return data?.shop_id || null;
 }
@@ -217,6 +239,34 @@ async function applyReadStateForUser(notifications, userId) {
   }));
 }
 
+async function attachActorProfiles(notifications) {
+  const uniqueNotifications = dedupeNotificationsById(notifications);
+  const actorIds = Array.from(
+    new Set(uniqueNotifications.map((notification) => notification.actor_id).filter(Boolean))
+  );
+
+  if (!actorIds.length) {
+    return uniqueNotifications;
+  }
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, full_name, email, avatar_url")
+    .in("id", actorIds);
+
+  if (error) {
+    logSupabaseError("getNotificationActorProfiles Error", error);
+    return uniqueNotifications;
+  }
+
+  const profilesById = new Map((data || []).map((profile) => [profile.id, profile]));
+
+  return uniqueNotifications.map((notification) => ({
+    ...notification,
+    actor: profilesById.get(notification.actor_id) || notification.actor || null,
+  }));
+}
+
 export async function getMyNotifications() {
   const { data, error } = await getMyNotificationsResult();
 
@@ -244,9 +294,14 @@ export async function getMyNotificationsResult() {
     primary = await fetchMyNotificationRows(user.id);
   }
 
+  if (isMissingColumnError(primary.error)) {
+    primary = await fetchMyNotificationRows(user.id, NOTIFICATION_FIELDS, { filterPublished: false });
+  }
+
   if (!primary.error) {
     const notifications = (primary.data || []).map(normalizeNotification);
-    const notificationsWithReadState = await applyReadStateForUser(notifications, user.id);
+    const notificationsWithActors = await attachActorProfiles(notifications);
+    const notificationsWithReadState = await applyReadStateForUser(notificationsWithActors, user.id);
 
     notifyUnreadNotificationCount(getUnreadCountFromNotifications(notificationsWithReadState));
 
@@ -263,9 +318,16 @@ export async function getMyNotificationsResult() {
       fallback = await fetchByRecipientColumn("recipient_id", user.id);
     }
 
+    if (isMissingColumnError(fallback.error)) {
+      fallback = await fetchByRecipientColumn("recipient_id", user.id, NOTIFICATION_FIELDS, {
+        filterPublished: false,
+      });
+    }
+
     if (!fallback.error) {
       const notifications = (fallback.data || []).map(normalizeNotification);
-      const notificationsWithReadState = await applyReadStateForUser(notifications, user.id);
+      const notificationsWithActors = await attachActorProfiles(notifications);
+      const notificationsWithReadState = await applyReadStateForUser(notificationsWithActors, user.id);
 
       notifyUnreadNotificationCount(getUnreadCountFromNotifications(notificationsWithReadState));
 
@@ -481,6 +543,10 @@ export async function createNotification(payload) {
 export async function createSocialNotification({ recipientId, type, postId, commentId = null }) {
   if (!recipientId || !type || !postId) {
     return { data: null, error: new Error("Missing social notification fields.") };
+  }
+
+  if (type === "post_reaction") {
+    return { data: null, error: null };
   }
 
   const { data, error } = await supabase.rpc("create_social_notification", {
