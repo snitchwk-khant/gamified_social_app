@@ -113,6 +113,7 @@ function SalesTargetsPage({ mode = "employees" }) {
   const [loading, setLoading] = useState(true);
   const [shopsLoading, setShopsLoading] = useState(false);
   const [shopManagementSaving, setShopManagementSaving] = useState(false);
+  const [shopEmployeeRemovingId, setShopEmployeeRemovingId] = useState("");
   const [shopStatusSavingId, setShopStatusSavingId] = useState("");
   const [shopDeleteDialog, setShopDeleteDialog] = useState(null);
   const [shopDeleting, setShopDeleting] = useState(false);
@@ -643,6 +644,31 @@ function SalesTargetsPage({ mode = "employees" }) {
     });
   };
 
+  const handleRemoveShopEmployee = async (employee) => {
+    if (!isEditingShop || !shopManagementForm.shopId || shopManagementForm.shopId === "new" || shopEmployeeRemovingId) {
+      return;
+    }
+
+    const employeeName = employee.full_name || employee.email || "Employee";
+    const nextEmployeeIds = selectedShopEmployeeIds.filter((employeeId) => employeeId !== employee.id);
+
+    setShopEmployeeRemovingId(employee.id);
+    setError("");
+    setNotice("");
+
+    try {
+      await updateShopEmployees(shopManagementForm.shopId, nextEmployeeIds);
+      setSelectedShopEmployeeIds(nextEmployeeIds);
+      await loadShopTargets();
+      setNotice(`${employeeName} removed from ${editingShopName || "shop"}.`);
+    } catch (err) {
+      console.error("Shop employee remove error:", err);
+      setError(err?.message || "Unable to remove employee from shop.");
+    } finally {
+      setShopEmployeeRemovingId("");
+    }
+  };
+
   const handleSaveShopManagement = async (event) => {
     event.preventDefault();
 
@@ -1010,36 +1036,54 @@ function SalesTargetsPage({ mode = "employees" }) {
 
             <div className="mt-4 max-h-56 overflow-auto rounded-2xl border border-slate-200">
               {filteredShopEmployees.length ? (
-                filteredShopEmployees.map((employee) => (
-                  <div
-                    key={employee.id}
-                    className="flex cursor-pointer items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 text-sm last:border-b-0 hover:bg-slate-50"
-                  >
-                    <div className="min-w-0">
-                      <Link
-                        to={getProfilePath(employee.id, user?.id)}
-                        className="block cursor-pointer truncate font-semibold text-slate-800 transition hover:text-[#c446ff]"
-                      >
-                        {employee.full_name || employee.email || "Unnamed employee"}
-                      </Link>
-                      <span className="block truncate text-xs text-slate-500">{employee.email}</span>
-                      <span className="block truncate text-xs text-slate-400">
-                        {employee.current_shop?.name ? `Current shop: ${employee.current_shop.name}` : "Unassigned"}
-                      </span>
+                filteredShopEmployees.map((employee) => {
+                  const employeeName = employee.full_name || employee.email || "Unnamed employee";
+                  const isAssignedToEditingShop = isEditingShop && employee.current_shop_id === shopManagementForm.shopId;
+                  const isRemovingEmployee = shopEmployeeRemovingId === employee.id;
+
+                  return (
+                    <div
+                      key={employee.id}
+                      className="flex cursor-pointer items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 text-sm last:border-b-0 hover:bg-slate-50"
+                    >
+                      <div className="min-w-0">
+                        <Link
+                          to={getProfilePath(employee.id, user?.id)}
+                          className="block cursor-pointer truncate font-semibold text-slate-800 transition hover:text-[#c446ff]"
+                        >
+                          {employeeName}
+                        </Link>
+                        <span className="block truncate text-xs text-slate-500">{employee.email}</span>
+                        <span className="block truncate text-xs text-slate-400">
+                          {employee.current_shop?.name ? `Current shop: ${employee.current_shop.name}` : "Unassigned"}
+                        </span>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-3">
+                        {isAssignedToEditingShop ? (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveShopEmployee(employee)}
+                            disabled={shopManagementSaving || Boolean(shopEmployeeRemovingId)}
+                            className="rounded-full border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {isRemovingEmployee ? "Removing..." : "Remove"}
+                          </button>
+                        ) : null}
+                        <label className="flex cursor-pointer items-center">
+                          <span className="sr-only">
+                            {selectedShopEmployeeIds.includes(employee.id) ? "Unassign" : "Assign"} {employeeName}
+                          </span>
+                          <input
+                            type="checkbox"
+                            checked={selectedShopEmployeeIds.includes(employee.id)}
+                            onChange={() => toggleShopEmployee(employee.id)}
+                            className="h-4 w-4 accent-[#c446ff]"
+                          />
+                        </label>
+                      </div>
                     </div>
-                    <label className="flex shrink-0 cursor-pointer items-center">
-                      <span className="sr-only">
-                        {selectedShopEmployeeIds.includes(employee.id) ? "Unassign" : "Assign"} {employee.full_name || employee.email}
-                      </span>
-                      <input
-                        type="checkbox"
-                        checked={selectedShopEmployeeIds.includes(employee.id)}
-                        onChange={() => toggleShopEmployee(employee.id)}
-                        className="h-4 w-4 accent-[#c446ff]"
-                      />
-                    </label>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <p className="px-4 py-6 text-center text-sm text-slate-500">No employees found.</p>
               )}

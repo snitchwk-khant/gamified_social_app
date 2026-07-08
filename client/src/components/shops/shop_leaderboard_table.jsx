@@ -96,14 +96,16 @@ function ShopLeaderboardTable({ rows = [], isDark = false }) {
 
 export default ShopLeaderboardTable;
 
-export function AvatarGroup({ employees = [], isDark = false, size = "md" }) {
+export function AvatarGroup({ employees = [], isDark = false, size = "md", maxVisible = employees.length }) {
   const { user } = useAuth();
   const avatarSizeClass = size === "sm" ? "h-8 w-8 text-xs" : "h-12 w-12 text-sm";
+  const visibleEmployees = employees.slice(0, maxVisible);
+  const hiddenEmployeeCount = Math.max(0, employees.length - visibleEmployees.length);
 
   return (
     <div className={size === "sm" ? "flex min-h-8 items-center" : "flex min-h-12 items-center"}>
       <div className={size === "sm" ? "flex -space-x-2" : "flex -space-x-3"}>
-        {employees.map((employee) => {
+        {visibleEmployees.map((employee) => {
           const employeeName = employee.full_name || employee.email || "Employee";
 
           return (
@@ -124,6 +126,17 @@ export function AvatarGroup({ employees = [], isDark = false, size = "md" }) {
             </Link>
           );
         })}
+        {hiddenEmployeeCount > 0 ? (
+          <span
+            className={`relative flex ${avatarSizeClass} items-center justify-center rounded-full border-2 bg-slate-900 font-bold text-slate-100 shadow-sm ${
+              isDark ? "border-slate-950" : "border-white"
+            }`}
+            aria-label={`${hiddenEmployeeCount} more employees`}
+            title={`${hiddenEmployeeCount} more employees`}
+          >
+            +{hiddenEmployeeCount}
+          </span>
+        ) : null}
       </div>
     </div>
   );

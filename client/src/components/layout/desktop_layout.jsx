@@ -9,37 +9,74 @@ const MOBILE_NAV_ITEMS = [
   { label: "Profile", icon: "👤", to: "/profile" },
 ];
 
-function DesktopLayout({ left, center, right }) {
+function DesktopLayout({
+  left,
+  center,
+  right,
+  isHomeRoute = false,
+  isShopsRoute = false,
+  isNotificationsRoute = false,
+  isLeaderboardRoute = false,
+  isProfileRoute = false,
+  isMessagesRoute = false,
+}) {
   const { isDark } = useTheme();
+  const hasDesktopSidebar =
+    isHomeRoute || isShopsRoute || isNotificationsRoute || isLeaderboardRoute || isProfileRoute || isMessagesRoute;
+  const usesWideSidebarLayout = isShopsRoute || isNotificationsRoute || isLeaderboardRoute || isProfileRoute || isMessagesRoute;
 
   return (
     <SafeAreaLayout className={`min-h-screen overflow-x-hidden ${isDark ? "bg-slate-950 text-slate-100" : "bg-[#f0f2f5] text-slate-800"}`}>
-      <div className="mx-auto grid min-h-screen w-full max-w-[1460px] grid-cols-1 gap-5 overflow-visible px-3 pb-24 pt-3 sm:px-4 sm:pt-4 xl:h-screen xl:grid-cols-[280px_minmax(0,1fr)_320px] xl:overflow-hidden xl:px-6 xl:pb-4">
-        <aside className="hidden min-h-0 flex-col gap-6 xl:flex">
+      <div
+        className={`mx-auto grid min-h-screen w-full grid-cols-1 gap-5 overflow-visible px-3 pb-[calc(6.5rem+var(--safe-area-inset-bottom))] pt-3 sm:px-4 sm:pt-4 ${
+          isHomeRoute
+            ? "xl:h-screen xl:max-w-[1600px] xl:grid-cols-[320px_minmax(0,760px)_320px] xl:justify-center xl:gap-6 xl:overflow-hidden xl:px-0 xl:pb-4 xl:pt-4"
+            : usesWideSidebarLayout
+              ? "xl:max-w-[1600px] xl:grid-cols-[320px_minmax(0,1fr)] xl:justify-center xl:gap-6 xl:px-6 xl:pb-6 xl:pt-6"
+            : "xl:h-screen xl:overflow-hidden xl:px-6 xl:pb-4"
+        }`}
+      >
+        <aside
+          className={
+            hasDesktopSidebar
+              ? `hidden xl:sticky xl:col-start-1 xl:row-start-1 xl:block xl:min-w-0 xl:overflow-hidden ${
+                  usesWideSidebarLayout ? "xl:top-6 xl:h-[calc(100vh-3rem)]" : "xl:top-4 xl:h-[calc(100vh-2rem)]"
+                }`
+              : "hidden"
+          }
+        >
           {left}
         </aside>
 
         <main
-          className={`min-h-0 overflow-hidden rounded-2xl border p-3 sm:p-4 xl:p-5 ${
+          className={`min-h-0 overflow-hidden rounded-2xl border p-3 sm:p-4 xl:col-start-2 xl:row-start-1 xl:min-w-0 xl:w-full ${
             isDark
               ? "border-slate-800 bg-slate-950 shadow-2xl shadow-slate-950/30"
               : "border-slate-200 bg-white shadow-sm"
+          } ${
+            isHomeRoute
+              ? isDark
+                ? "xl:rounded-none xl:border-0 xl:bg-transparent xl:p-0 xl:shadow-none"
+                : "xl:rounded-none xl:border-0 xl:bg-transparent xl:p-0 xl:shadow-none"
+              : usesWideSidebarLayout
+                ? "xl:rounded-none xl:border-0 xl:bg-transparent xl:p-0 xl:shadow-none"
+              : "xl:p-4"
           }`}
         >
           {center}
         </main>
 
-        <aside className="hidden min-h-0 flex-col gap-5 xl:flex">
+        <aside className={isHomeRoute ? "hidden xl:sticky xl:top-4 xl:col-start-3 xl:row-start-1 xl:block xl:h-[calc(100vh-2rem)] xl:min-w-0 xl:overflow-y-auto" : "hidden"}>
           {right}
         </aside>
       </div>
 
       <nav
-        className={`fixed inset-x-0 bottom-0 z-50 border-t pb-[max(var(--safe-area-inset-bottom),0.5rem)] pl-[max(var(--safe-area-inset-left),0.5rem)] pr-[max(var(--safe-area-inset-right),0.5rem)] pt-2 backdrop-blur-xl xl:hidden ${
-          isDark ? "border-white/10 bg-slate-950/90" : "border-slate-200 bg-white/90"
+        className={`fixed inset-x-3 bottom-[calc(max(var(--safe-area-inset-bottom),0px)+0.75rem)] z-50 mx-auto max-w-md rounded-full border px-2 py-2 shadow-2xl backdrop-blur-2xl xl:hidden ${
+          isDark ? "border-white/10 bg-slate-950/55 shadow-slate-950/45" : "border-white/70 bg-white/55 shadow-slate-900/15"
         }`}
       >
-        <div className="mx-auto grid max-w-md grid-cols-4 gap-1">
+        <div className="grid grid-cols-4 gap-1">
           {MOBILE_NAV_ITEMS.map((item) => (
             <NavLink
               key={item.label}

@@ -5,7 +5,7 @@ function Logo() {
 
   return (
     <div
-      className={`rounded-2xl border p-5 text-center ${
+      className={`overflow-hidden rounded-2xl border p-5 text-center ${
         isDark
           ? "border-slate-800 bg-slate-950 text-slate-100 shadow-lg shadow-slate-950/20"
           : "border-slate-200 bg-white text-slate-800 shadow-sm"

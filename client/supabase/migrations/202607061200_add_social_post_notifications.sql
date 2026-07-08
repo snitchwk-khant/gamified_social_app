@@ -38,6 +38,8 @@ declare
   new_notification_id uuid;
   actor_name text;
   notification_title text;
+  notification_body text;
+  comment_preview text;
   notification_action_url text;
   verified_recipient_id uuid;
 begin
@@ -92,10 +94,11 @@ begin
     limit 1;
 
     notification_title := '❤️ ' || actor_name || ' reacted to your post.';
+    notification_body := notification_title;
     notification_action_url := '/home?post=' || source_post_id::text;
   elsif notification_type = 'post_comment' then
-    select posts.user_id
-    into verified_recipient_id
+    select posts.user_id, left(nullif(trim(comments.content), ''), 160)
+    into verified_recipient_id, comment_preview
     from public.posts
     inner join public.comments
       on comments.post_id = posts.id
@@ -116,10 +119,11 @@ begin
     limit 1;
 
     notification_title := '💬 ' || actor_name || ' commented on your post.';
+    notification_body := coalesce(comment_preview, notification_title);
     notification_action_url := '/home?post=' || source_post_id::text || '&comments=1';
   else
-    select parent_comments.user_id
-    into verified_recipient_id
+    select parent_comments.user_id, left(nullif(trim(replies.content), ''), 160)
+    into verified_recipient_id, comment_preview
     from public.comments replies
     inner join public.comments parent_comments
       on parent_comments.id = replies.parent_comment_id
@@ -139,6 +143,7 @@ begin
     limit 1;
 
     notification_title := '↩️ ' || actor_name || ' replied to your comment.';
+    notification_body := coalesce(comment_preview, notification_title);
     notification_action_url := '/home?post=' || source_post_id::text || '&comments=1&comment=' || source_comment_id::text;
   end if;
 
@@ -173,8 +178,8 @@ begin
     source_post_id,
     source_comment_id,
     notification_title,
-    notification_title,
-    notification_title,
+    notification_body,
+    notification_body,
     notification_type,
     'Social',
     'normal',
@@ -186,6 +191,7 @@ begin
       'action_url', notification_action_url,
       'post_id', source_post_id,
       'comment_id', source_comment_id,
+      'comment_preview', comment_preview,
       'actor_id', auth.uid(),
       'type', notification_type
     )

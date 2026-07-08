@@ -87,7 +87,7 @@ function FeedVideoPlayer({ src, isDark }) {
   }
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-black">
+    <div className="relative flex justify-center overflow-hidden rounded-2xl bg-black xl:items-center">
       <video
         ref={videoRef}
         src={src}
@@ -104,7 +104,7 @@ function FeedVideoPlayer({ src, isDark }) {
         }}
         onPause={() => setPlaying(false)}
         onEnded={() => setPlaying(false)}
-        className="aspect-video max-h-[520px] w-full cursor-pointer object-contain"
+        className="aspect-video max-h-[520px] w-full cursor-pointer object-contain xl:h-auto xl:max-h-[80vh] xl:max-w-full"
       />
 
       {buffering ? (
@@ -310,7 +310,7 @@ function FeedImageCarousel({ urls, isDark }) {
   return (
     <>
       <div
-        className="relative overflow-hidden rounded-2xl touch-pan-y"
+        className="relative overflow-hidden rounded-2xl touch-pan-y xl:bg-black"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
@@ -326,7 +326,7 @@ function FeedImageCarousel({ urls, isDark }) {
               key={`${url}-${index}`}
               type="button"
               onClick={() => openViewer(index)}
-              className="w-full shrink-0 cursor-pointer bg-transparent p-0"
+              className="flex w-full shrink-0 cursor-pointer items-center justify-center bg-transparent p-0 xl:bg-black"
               aria-label={`Open image ${index + 1}`}
             >
               {loadedIndexes.has(index) ? (
@@ -335,7 +335,7 @@ function FeedImageCarousel({ urls, isDark }) {
                   alt={`Post attachment ${index + 1}`}
                   loading={Math.abs(index - activeIndex) <= 1 ? "eager" : "lazy"}
                   draggable={false}
-                  className="max-h-[520px] w-full select-none object-contain"
+                  className="max-h-[520px] w-full select-none object-contain xl:h-auto xl:w-auto xl:max-h-[80vh] xl:max-w-full"
                 />
               ) : (
                 <div className={`aspect-video w-full ${isDark ? "bg-slate-950" : "bg-slate-100"}`} />
@@ -1017,12 +1017,12 @@ function PostCard({
 
   return (
     <article
-      className={`rounded-2xl border p-4 sm:p-6 ${
-        isDark ? "border-slate-800 bg-slate-900 shadow-xl" : "border-slate-200 bg-white shadow-sm"
+      className={`py-3 sm:py-5 xl:mx-auto xl:w-full xl:rounded-2xl xl:border xl:p-4 xl:shadow-sm ${
+        isDark ? "xl:border-slate-800 xl:bg-slate-950" : "xl:border-slate-200 xl:bg-white"
       }`}
     >
-      <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
-        <div className="flex items-center gap-3 min-w-0">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 sm:gap-4 sm:px-0">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           {(() => {
             const displayName = profile?.full_name || authorName || "";
             const displayAvatar = profile?.avatar_url ?? authorAvatar ?? null;
@@ -1034,7 +1034,7 @@ function PostCard({
                 <img
                   src={maskedAvatarPath}
                   alt="Masked"
-                  className="h-10 w-10 rounded-full object-cover"
+                  className="h-9 w-9 rounded-full object-cover sm:h-10 sm:w-10"
                 />
               );
             }
@@ -1044,7 +1044,7 @@ function PostCard({
                 <img
                   src={displayAvatar}
                   alt={displayName || "Profile avatar"}
-                  className="h-10 w-10 rounded-full object-cover"
+                  className="h-9 w-9 rounded-full object-cover sm:h-10 sm:w-10"
                 />
               );
 
@@ -1059,7 +1059,7 @@ function PostCard({
 
             const avatarFallback = (
               <div
-                className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold ${
+                className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold sm:h-10 sm:w-10 sm:text-sm ${
                   isDark ? "bg-slate-700 text-white" : "bg-slate-200 text-slate-700"
                 }`}
               >
@@ -1093,7 +1093,7 @@ function PostCard({
         </div>
 
         <span
-          className={`shrink-0 rounded-full px-3 py-1 text-xs ${
+          className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] sm:px-3 sm:py-1 sm:text-xs ${
             isDark ? "bg-slate-800 text-slate-400" : "bg-slate-100 text-slate-500"
           }`}
         >
@@ -1102,13 +1102,13 @@ function PostCard({
       </div>
 
       {body ? (
-        <p className={`mt-4 whitespace-pre-wrap ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+        <p className={`mt-2.5 whitespace-pre-wrap px-3 text-sm sm:mt-4 sm:px-0 sm:text-base ${isDark ? "text-slate-300" : "text-slate-700"}`}>
           {body}
         </p>
       ) : null}
 
       {imageUrl ? (
-        <div className="mt-4 overflow-hidden rounded-2xl">
+        <div className="mt-3 overflow-hidden sm:mt-4">
           {isVideoPost ? (
             <FeedVideoPlayer src={mediaUrls[0]} isDark={isDark} />
           ) : (
@@ -1117,14 +1117,14 @@ function PostCard({
         </div>
       ) : null}
 
-      <div className="mt-5 flex flex-wrap items-center gap-3 sm:gap-4">
+      <div className="mt-3 flex flex-wrap items-center gap-2.5 px-3 sm:mt-5 sm:gap-4 sm:px-0">
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={handleLoveClick}
             disabled={loveToggling}
             aria-label={hasLoved ? "Remove Love" : "Love post"}
-            className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-70 ${
+            className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-70 sm:h-10 sm:w-10 ${
               hasLoved
                 ? isDark
                   ? "bg-rose-600 text-white hover:bg-rose-500"
@@ -1161,7 +1161,7 @@ function PostCard({
 
         <button
           onClick={() => setCommentOpen(true)}
-          className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+          className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition sm:px-4 sm:py-2 ${
             isDark
               ? "bg-slate-800 text-white hover:bg-sky-500"
               : "bg-[#f6e8ff] text-[#c446ff] hover:bg-[#edd4ff]"
@@ -1179,7 +1179,7 @@ function PostCard({
             type="button"
             onClick={handleDeletePost}
             disabled={deleting}
-            className={`ml-0 rounded-full px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-70 sm:ml-auto ${
+            className={`ml-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-70 sm:ml-auto sm:px-4 sm:py-2 ${
               isDark
                 ? "bg-slate-800 text-rose-200 hover:bg-rose-950"
                 : "bg-rose-50 text-rose-700 hover:bg-rose-100"
@@ -1191,7 +1191,7 @@ function PostCard({
       </div>
 
       {deleteError ? (
-        <p className={`mt-3 text-sm ${isDark ? "text-rose-300" : "text-rose-700"}`}>
+        <p className={`mt-2 px-3 text-sm sm:mt-3 sm:px-0 ${isDark ? "text-rose-300" : "text-rose-700"}`}>
           {deleteError}
         </p>
       ) : null}

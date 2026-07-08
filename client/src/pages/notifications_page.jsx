@@ -13,10 +13,6 @@ import {
 const FILTERS = [
   { id: "all", label: "All" },
   { id: "unread", label: "Unread" },
-  { id: "Achievement", label: "Achievements" },
-  { id: "Social", label: "Social" },
-  { id: "Announcement", label: "Announcements" },
-  { id: "Reward", label: "Rewards" },
 ];
 
 const CATEGORY_STYLES = {
@@ -66,7 +62,6 @@ function NotificationsPage() {
   const [notifications, setNotifications] = useState([]);
   const [selectedNotification, setSelectedNotification] = useState(null);
   const [activeFilter, setActiveFilter] = useState("all");
-  const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [markingById, setMarkingById] = useState({});
@@ -103,28 +98,22 @@ function NotificationsPage() {
   }, []);
 
   const filteredNotifications = useMemo(() => {
-    const normalizedSearch = searchTerm.trim().toLowerCase();
+    return notifications
+      .filter((item) => {
+        const category = item.category || item.type || "System";
 
-    return notifications.filter((item) => {
-      const category = item.category || item.type || "System";
+        if (activeFilter === "unread") {
+          return !item.is_read;
+        }
 
-      if (activeFilter === "unread" && item.is_read) {
-        return false;
-      }
+        if (activeFilter === "all") {
+          return true;
+        }
 
-      if (!["all", "unread"].includes(activeFilter) && category !== activeFilter) {
-        return false;
-      }
-
-      if (!normalizedSearch) {
-        return true;
-      }
-
-      return [item.title, item.message || item.body, category].some((value) =>
-        value?.toString().toLowerCase().includes(normalizedSearch)
-      );
-    });
-  }, [activeFilter, notifications, searchTerm]);
+        return category === activeFilter;
+      })
+      .sort((left, right) => new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime());
+  }, [activeFilter, notifications]);
 
   const handleMarkRead = async (id) => {
     if (!id) {
@@ -191,73 +180,45 @@ function NotificationsPage() {
 
   return (
     <section className="space-y-5 pb-24 sm:space-y-6 sm:pb-0">
-      <div
-        className={`rounded-3xl border p-5 shadow-sm ${
-          isDark ? "border-slate-800 bg-slate-950 text-slate-100" : "border-slate-200 bg-white text-slate-900"
-        }`}
-      >
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#c446ff]">Notifications</p>
-        <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-2xl font-bold">Notification Center</h1>
+      <header className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h1 className={`text-2xl font-bold ${isDark ? "text-slate-100" : "text-slate-950"}`}>Notifications</h1>
           <button
             type="button"
             onClick={handleMarkAllRead}
             disabled={!unreadCount || markingAll}
-            className={`h-10 rounded-2xl border px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+            className={`h-10 shrink-0 rounded-2xl border px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
               isDark
-                ? "border-[#c446ff]/60 bg-slate-950 text-[#e4b3ff] hover:bg-[#c446ff]/10"
-                : "border-[#c446ff]/40 bg-white text-[#9d2bd5] hover:bg-[#f8e9ff]"
+                ? "border-[#c446ff]/50 bg-slate-950 text-[#e4b3ff] hover:bg-[#c446ff]/10"
+                : "border-[#c446ff]/35 bg-white text-[#9d2bd5] hover:bg-[#f8e9ff]"
             }`}
           >
-            {markingAll ? "Marking..." : "Mark All as Read"}
+            {markingAll ? "Marking..." : "Mark all as read"}
           </button>
         </div>
-        <p className={isDark ? "mt-2 text-sm text-slate-400" : "mt-2 text-sm text-slate-500"}>
-          Updates from Gemify, achievements, rewards, and system messages.
-        </p>
-      </div>
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {FILTERS.map((filter) => {
+            const isActive = activeFilter === filter.id;
 
-      <div
-        className={`rounded-3xl border p-4 shadow-sm sm:p-5 ${
-          isDark ? "border-slate-800 bg-slate-950 text-slate-100" : "border-slate-200 bg-white text-slate-900"
-        }`}
-      >
-        <div className="flex flex-col gap-3">
-          <input
-            type="search"
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder="Search title, message, category"
-            className={`h-12 w-full rounded-2xl border px-4 text-sm outline-none transition placeholder:text-slate-400 ${
-              isDark
-                ? "border-slate-800 bg-slate-900 text-slate-100 focus:border-sky-500"
-                : "border-slate-200 bg-slate-50 text-slate-900 focus:border-[#c446ff] focus:bg-white"
-            }`}
-          />
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {FILTERS.map((filter) => {
-              const isActive = activeFilter === filter.id;
-
-              return (
-                <button
-                  key={filter.id}
-                  type="button"
-                  onClick={() => setActiveFilter(filter.id)}
-                  className={`h-10 shrink-0 rounded-2xl px-4 text-sm font-semibold transition ${
-                    isActive
-                      ? "bg-[#c446ff] text-white"
-                      : isDark
-                        ? "bg-slate-900 text-slate-300 hover:bg-slate-800"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                  }`}
-                >
-                  {filter.label}
-                </button>
-              );
-            })}
-          </div>
+            return (
+              <button
+                key={filter.id}
+                type="button"
+                onClick={() => setActiveFilter(filter.id)}
+                className={`h-10 shrink-0 rounded-2xl px-4 text-sm font-semibold transition ${
+                  isActive
+                    ? "bg-[#c446ff] text-white"
+                    : isDark
+                      ? "bg-slate-900 text-slate-300 hover:bg-slate-800"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                {filter.label}
+              </button>
+            );
+          })}
         </div>
-      </div>
+      </header>
 
       {loading ? (
         <div

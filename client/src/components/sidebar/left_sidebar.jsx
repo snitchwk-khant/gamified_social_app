@@ -24,7 +24,7 @@ function LeftSidebar() {
 
   return (
     <div
-      className={`flex h-full flex-col justify-between rounded-2xl border p-5 ${
+      className={`flex h-full w-full flex-col justify-between overflow-hidden rounded-2xl border p-4 ${
         isDark
           ? "border-slate-800 bg-slate-950 text-slate-100 shadow-2xl shadow-slate-950/30"
           : "border-slate-200 bg-white text-slate-800 shadow-sm"
@@ -32,27 +32,25 @@ function LeftSidebar() {
     >
       <div>
         <Logo />
-        <div className="mt-4">
-          <UserSearch />
-        </div>
-        <nav className="mt-4 space-y-3">
+        <nav className="mt-6 space-y-1.5">
           <MenuItem to="/home" icon="🏠" title="Home" />
-          <MenuItem to="/notifications" icon="🔔" title="Notifications" badge={unreadNotifications} />
-          <MenuItem to="/anonymous-mailbox" icon="📬" title="Mailbox" />
           <MenuItem to="/leaderboard" icon="🏆" title="Leaderboard" />
-          <MenuItem to="/monthly-champions" icon="👑" title="Champions" />
-          <MenuItem to="/individual-ranking" icon="👤" title="Soft Skill Ranking" />
+          <MenuItem to="/anonymous-mailbox" icon="📬" title="Messages" />
+          <MenuItem to="/notifications" icon="🔔" title="Notifications" badge={unreadNotifications} />
           <MenuItem to="/shops" icon="🏪" title="Shops" />
           <MenuItem to="/profile" icon="👤" title="Profile" />
         </nav>
       </div>
       <div className="space-y-4">
+        <div>
+          <UserSearch />
+        </div>
         {canViewAdminLinks ? (
           <div>
             <p className={`px-4 text-xs font-semibold uppercase tracking-[0.24em] ${isDark ? "text-slate-500" : "text-slate-400"}`}>
               Admin
             </p>
-            <nav className="mt-3 space-y-3">
+            <nav className="mt-3 space-y-1.5">
               <MenuItem to="/admin/sales-targets" icon="📊" title="Sales Targets" />
               <MenuItem to="/admin/announcements" icon="📢" title="Announcements" />
               <MenuItem to="/admin/anonymous-mailbox" icon="📬" title="Mailbox" />

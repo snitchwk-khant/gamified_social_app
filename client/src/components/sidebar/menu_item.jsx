@@ -9,19 +9,21 @@ function MenuItem({ icon, title, to, badge = 0 }) {
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `flex items-center gap-4 rounded-2xl px-4 py-3 text-sm font-medium transition-colors duration-200 ${
+        `group/menu flex min-h-12 items-center gap-4 rounded-xl px-3 py-2.5 text-[15px] font-semibold transition-colors duration-200 ${
           isActive
             ? isDark
-              ? "bg-sky-600 text-white"
+              ? "bg-white/10 text-white"
               : "bg-[#f6e8ff] text-[#c446ff]"
             : isDark
-              ? "text-slate-300 hover:bg-slate-900 hover:text-white"
-              : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+              ? "text-slate-300 hover:bg-white/5 hover:text-white"
+              : "text-slate-700 hover:bg-slate-100/80 hover:text-slate-950"
         }`
       }
     >
-      <span className="text-xl">{icon}</span>
-      <span className="min-w-0 flex-1 truncate">{title}</span>
+      <span className="w-7 text-center text-2xl leading-none transition-transform duration-200 group-hover/menu:scale-105">{icon}</span>
+      <span className="min-w-0 flex-1 truncate">
+        {title}
+      </span>
       {normalizedBadge > 0 ? (
         <span
           className={`rounded-full px-2 py-0.5 text-xs font-bold ${

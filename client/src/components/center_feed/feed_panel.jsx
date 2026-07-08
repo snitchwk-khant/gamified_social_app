@@ -26,7 +26,7 @@ function FeedPanel({
   }, [focusedPostId, posts.length]);
 
   return (
-    <div className="space-y-6">
+    <div className="divide-y divide-slate-500/20">
       {posts.map((post) => (
         <div
           key={post.id}

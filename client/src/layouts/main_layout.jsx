@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Outlet, useNavigate } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import DesktopLayout from "../components/layout/desktop_layout";
+import LeaderboardCard from "../components/leaderboard/leaderboard_card";
 import LeftSidebar from "../components/sidebar/left_sidebar";
 import { AvatarGroup } from "../components/shops/shop_leaderboard_table";
 import UserSearch from "../components/user_search/user_search";
@@ -102,6 +103,7 @@ function getUserShopSummary(rows = [], employees = [], userId = "") {
 function MainLayout() {
   const { user } = useAuth();
   const { isDark } = useTheme();
+  const location = useLocation();
   const navigate = useNavigate();
   const [showHighlights, setShowHighlights] = useState(false);
   const [leaderboardRows, setLeaderboardRows] = useState([]);
@@ -179,6 +181,12 @@ function MainLayout() {
   };
 
   const topFiveRows = leaderboardRows.slice(0, 5);
+  const isHomeRoute = location.pathname === "/home";
+  const isShopsRoute = location.pathname === "/shops" || location.pathname.startsWith("/shops/") || location.pathname.startsWith("/shop/");
+  const isNotificationsRoute = location.pathname === "/notifications";
+  const isLeaderboardRoute = location.pathname === "/leaderboard";
+  const isProfileRoute = location.pathname === "/profile" || location.pathname.startsWith("/profile/");
+  const isMessagesRoute = location.pathname === "/anonymous-mailbox";
 
   const handleOpenShop = (event, shopId) => {
     if (!shopId || event.target.closest("a")) {
@@ -193,17 +201,31 @@ function MainLayout() {
     <>
       <DesktopLayout
         left={<LeftSidebar />}
+        isHomeRoute={isHomeRoute}
+        isShopsRoute={isShopsRoute}
+        isNotificationsRoute={isNotificationsRoute}
+        isLeaderboardRoute={isLeaderboardRoute}
+        isProfileRoute={isProfileRoute}
+        isMessagesRoute={isMessagesRoute}
         center={
-          <div className="flex h-full min-w-0 flex-col gap-4 sm:gap-5">
+          <div className={`flex h-full min-w-0 flex-col gap-4 sm:gap-5 ${isHomeRoute ? "xl:items-stretch xl:gap-0" : ""}`}>
             <div className="xl:hidden">
               <UserSearch inputId="mobile-user-search" />
             </div>
-            <div className="min-w-0 flex-1 overflow-auto pb-4">
+            <div
+              className={`min-w-0 flex-1 pb-4 xl:w-full xl:pb-8 ${
+                isShopsRoute || isNotificationsRoute || isLeaderboardRoute
+                  ? "overflow-visible"
+                  : isProfileRoute || isMessagesRoute
+                    ? "overflow-auto xl:overflow-visible"
+                    : "overflow-auto"
+              }`}
+            >
               <Outlet />
             </div>
           </div>
         }
-        right={null}
+        right={isHomeRoute ? <LeaderboardCard /> : null}
       />
 
       {showHighlights ? (

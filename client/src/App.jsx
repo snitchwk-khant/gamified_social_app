@@ -13,8 +13,6 @@ import NotificationsPage from "./pages/notifications_page";
 import ProfilePage from "./pages/profile_page";
 import ChangePasswordPage from "./pages/change_password_page";
 import LeaderboardPage from "./pages/leaderboard_page";
-import MonthlyChampionsPage from "./pages/monthly_champions_page";
-import IndividualRankingPage from "./pages/individual_ranking_page";
 import ShopsPage from "./pages/shops_page";
 import ShopProfilePage from "./pages/shop_profile_page";
 import SplashScreen from "./pages/SplashScreen";
@@ -315,8 +313,8 @@ function App() {
                   <Route path="/notifications" element={<NotificationsPage />} />
                   <Route path="/anonymous-mailbox" element={<AnonymousMailboxPage />} />
                   <Route path="/leaderboard" element={<LeaderboardPage />} />
-                  <Route path="/monthly-champions" element={<MonthlyChampionsPage />} />
-                  <Route path="/individual-ranking" element={<IndividualRankingPage />} />
+                  <Route path="/monthly-champions" element={<Navigate to="/leaderboard?tab=champions" replace />} />
+                  <Route path="/individual-ranking" element={<Navigate to="/leaderboard?tab=soft-skills" replace />} />
                   <Route path="/shops" element={<ShopsPage />} />
                   <Route path="/shops/:shopId" element={<ShopProfilePage />} />
                   <Route path="/profile" element={<ProfilePage />} />
