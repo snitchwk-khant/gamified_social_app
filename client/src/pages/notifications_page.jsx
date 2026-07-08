@@ -26,8 +26,12 @@ const CATEGORY_STYLES = {
   Leaderboard: { icon: "🏅", label: "Leaderboard" },
 };
 
-function getCategoryInfo(category) {
-  return CATEGORY_STYLES[category] || { icon: "🔔", label: category || "System" };
+const TYPE_STYLES = {
+  mention: { icon: "👤", label: "Mention" },
+};
+
+function getCategoryInfo(category, type = "") {
+  return TYPE_STYLES[type] || CATEGORY_STYLES[category] || { icon: "🔔", label: category || "System" };
 }
 
 function formatNotificationTime(value) {
@@ -69,27 +73,42 @@ function getInitials(profile) {
 
 function NotificationIcon({ item, categoryInfo, isDark }) {
   const actor = item?.actor;
+  const typeIcon = TYPE_STYLES[item?.type]?.icon || "";
 
   if (actor?.avatar_url) {
     return (
-      <img
-        src={actor.avatar_url}
-        alt=""
-        className={`h-11 w-11 shrink-0 rounded-2xl object-cover ${
-          isDark ? "bg-slate-900" : "bg-[#f6e8ff]"
-        }`}
-      />
+      <span className="relative h-11 w-11 shrink-0">
+        <img
+          src={actor.avatar_url}
+          alt=""
+          className={`h-11 w-11 rounded-2xl object-cover ${
+            isDark ? "bg-slate-900" : "bg-[#f6e8ff]"
+          }`}
+        />
+        {typeIcon ? (
+          <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-[#c446ff] text-[10px] text-white">
+            {typeIcon}
+          </span>
+        ) : null}
+      </span>
     );
   }
 
   if (actor) {
     return (
-      <span
-        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-sm font-bold ${
-          isDark ? "bg-slate-900 text-slate-100" : "bg-[#f6e8ff] text-[#8f29c8]"
-        }`}
-      >
-        {getInitials(actor)}
+      <span className="relative h-11 w-11 shrink-0">
+        <span
+          className={`flex h-11 w-11 items-center justify-center rounded-2xl text-sm font-bold ${
+            isDark ? "bg-slate-900 text-slate-100" : "bg-[#f6e8ff] text-[#8f29c8]"
+          }`}
+        >
+          {getInitials(actor)}
+        </span>
+        {typeIcon ? (
+          <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-[#c446ff] text-[10px] text-white">
+            {typeIcon}
+          </span>
+        ) : null}
       </span>
     );
   }
@@ -117,8 +136,11 @@ function NotificationsPage() {
   const [markingAll, setMarkingAll] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  const loadNotifications = useCallback(async () => {
-    setLoading(true);
+  const loadNotifications = useCallback(async ({ showLoading = true } = {}) => {
+    console.log("FETCH NOTIFICATIONS", { source: "notifications_page" });
+    if (showLoading) {
+      setLoading(true);
+    }
     setError("");
 
     const { data, error: fetchError } = await getMyNotificationsResult();
@@ -126,12 +148,19 @@ function NotificationsPage() {
     if (fetchError) {
       setNotifications([]);
       setError("Unable to load notifications right now. Please try again.");
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
       return;
     }
 
-    setNotifications(data || []);
-    setLoading(false);
+    const nextNotifications = data || [];
+    setNotifications(nextNotifications);
+    setUnreadCount(nextNotifications.filter((item) => !item.is_read).length);
+    console.log("STATE UPDATED", { source: "notifications_page", count: nextNotifications.length });
+    if (showLoading) {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -139,7 +168,9 @@ function NotificationsPage() {
   }, [loadNotifications]);
 
   useEffect(() => {
-    return subscribeToMyNotifications(loadNotifications);
+    return subscribeToMyNotifications(() => {
+      loadNotifications({ showLoading: false });
+    });
   }, [loadNotifications]);
 
   useEffect(() => {
@@ -317,7 +348,7 @@ function NotificationsPage() {
         <div className="space-y-3">
           {filteredNotifications.map((item) => {
             const category = item.category || item.type || "System";
-            const categoryInfo = getCategoryInfo(category);
+            const categoryInfo = getCategoryInfo(category, item.type);
 
             return (
               <button
@@ -373,7 +404,7 @@ function NotificationsPage() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#c446ff]">
-                  {getCategoryInfo(selectedNotification.category).label}
+                  {getCategoryInfo(selectedNotification.category, selectedNotification.type).label}
                 </p>
                 <h2 className="mt-2 text-xl font-bold">{selectedNotification.title}</h2>
                 <p className="mt-1 text-xs font-semibold text-slate-500">

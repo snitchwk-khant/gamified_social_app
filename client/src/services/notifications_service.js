@@ -32,6 +32,12 @@ function isMissingColumnError(error) {
 }
 
 function notifyNotificationSubscribers(payload) {
+  console.log("REALTIME EVENT", {
+    channel: NOTIFICATIONS_REALTIME_CHANNEL,
+    table: payload?.table,
+    eventType: payload?.eventType,
+  });
+
   notificationsChannelSubscribers.forEach((subscriber) => {
     try {
       subscriber(payload);
@@ -47,6 +53,7 @@ function getUnreadCountFromNotifications(notifications = []) {
 
 function notifyUnreadNotificationCount(count) {
   latestUnreadNotificationCount = Number(count) || 0;
+  console.log("STATE UPDATED", { source: "notification_unread_count", count: latestUnreadNotificationCount });
 
   unreadNotificationCountSubscribers.forEach((subscriber) => {
     try {
@@ -134,7 +141,7 @@ export function getNotificationActionUrl(item) {
 
   const params = new URLSearchParams({ post: item.post_id });
 
-  if (item.type === "post_comment" || item.type === "comment_reply") {
+  if (item.type === "post_comment" || item.type === "comment_reply" || item.type === "mention") {
     params.set("comments", "1");
   }
 
@@ -267,25 +274,25 @@ async function attachActorProfiles(notifications) {
   }));
 }
 
-async function attachReplyCommentTargets(notifications) {
+async function attachCommentNotificationTargets(notifications) {
   const uniqueNotifications = dedupeNotificationsById(notifications);
-  const parentCommentIds = Array.from(
+  const commentIds = Array.from(
     new Set(
       uniqueNotifications
-        .filter((notification) => notification.type === "comment_reply" && notification.entity_type === "comment")
+        .filter((notification) => ["comment_reply", "mention"].includes(notification.type) && notification.entity_type === "comment")
         .map((notification) => notification.entity_id)
         .filter(Boolean)
     )
   );
 
-  if (!parentCommentIds.length) {
+  if (!commentIds.length) {
     return uniqueNotifications;
   }
 
   const { data, error } = await supabase
     .from("comments")
     .select("id, post_id")
-    .in("id", parentCommentIds);
+    .in("id", commentIds);
 
   if (error) {
     logSupabaseError("getNotificationReplyTargets Error", error);
@@ -295,19 +302,19 @@ async function attachReplyCommentTargets(notifications) {
   const commentsById = new Map((data || []).map((comment) => [comment.id, comment]));
 
   return uniqueNotifications.map((notification) => {
-    if (notification.type !== "comment_reply" || notification.entity_type !== "comment") {
+    if (!["comment_reply", "mention"].includes(notification.type) || notification.entity_type !== "comment") {
       return notification;
     }
 
-    const parentComment = commentsById.get(notification.entity_id);
+    const targetComment = commentsById.get(notification.entity_id);
 
-    if (!parentComment?.post_id) {
+    if (!targetComment?.post_id) {
       return notification;
     }
 
     return {
       ...notification,
-      post_id: parentComment.post_id,
+      post_id: targetComment.post_id,
       comment_id: notification.entity_id,
     };
   });
@@ -347,7 +354,7 @@ export async function getMyNotificationsResult() {
   if (!primary.error) {
     const notifications = (primary.data || []).map(normalizeNotification);
     const notificationsWithActors = await attachActorProfiles(notifications);
-    const notificationsWithReplyTargets = await attachReplyCommentTargets(notificationsWithActors);
+    const notificationsWithReplyTargets = await attachCommentNotificationTargets(notificationsWithActors);
     const notificationsWithReadState = await applyReadStateForUser(notificationsWithReplyTargets, user.id);
 
     notifyUnreadNotificationCount(getUnreadCountFromNotifications(notificationsWithReadState));
@@ -374,7 +381,7 @@ export async function getMyNotificationsResult() {
     if (!fallback.error) {
       const notifications = (fallback.data || []).map(normalizeNotification);
       const notificationsWithActors = await attachActorProfiles(notifications);
-      const notificationsWithReplyTargets = await attachReplyCommentTargets(notificationsWithActors);
+      const notificationsWithReplyTargets = await attachCommentNotificationTargets(notificationsWithActors);
       const notificationsWithReadState = await applyReadStateForUser(notificationsWithReplyTargets, user.id);
 
       notifyUnreadNotificationCount(getUnreadCountFromNotifications(notificationsWithReadState));
@@ -593,7 +600,7 @@ export async function createSocialNotification({ recipientId, type, postId, comm
     return { data: null, error: new Error("Missing social notification fields.") };
   }
 
-  if (type === "post_reaction" || type === "post_comment" || type === "comment_reply") {
+  if (type === "post_reaction" || type === "post_comment" || type === "comment_reply" || type === "mention") {
     return { data: null, error: null };
   }
 
@@ -784,6 +791,10 @@ export function subscribeToMyNotifications(onPayload) {
 
       notificationsChannel = channel;
       channel.subscribe((status, error) => {
+        if (status === "SUBSCRIBED") {
+          console.log("SUBSCRIBED", { channel: NOTIFICATIONS_REALTIME_CHANNEL });
+        }
+
         if (error) {
           logSupabaseError("notifications realtime subscribe error", error);
         }

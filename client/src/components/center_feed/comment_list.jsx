@@ -29,23 +29,94 @@ function formatRelativeTime(dateString) {
   return `${diffYears}y ago`;
 }
 
-function renderCommentContent(content, isDark) {
-  return String(content || "")
-    .split(/(@[^\s@]+)/g)
-    .map((part, index) => {
-      if (part.startsWith("@")) {
-        return (
-          <span key={`${part}-${index}`} className={isDark ? "font-semibold text-sky-300" : "font-semibold text-[#c446ff]"}>
-            {part}
-          </span>
-        );
-      }
-
-      return part;
-    });
+function normalizeMentionName(value) {
+  return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-function CommentList({ comments, loading, onDeleteComment, onReplyComment, replyingToCommentId, focusedCommentId = "", renderReplyForm }) {
+function createMentionResolver(mentionUsers = []) {
+  const mentionEntries = (mentionUsers || [])
+    .filter((mentionUser) => mentionUser?.id && mentionUser?.full_name)
+    .map((mentionUser) => ({
+      user: mentionUser,
+      name: normalizeMentionName(mentionUser.full_name),
+    }))
+    .sort((left, right) => right.name.length - left.name.length);
+
+  return (text, startIndex) => {
+    const nextText = String(text || "").slice(startIndex + 1).toLowerCase();
+
+    for (const entry of mentionEntries) {
+      if (!nextText.startsWith(entry.name)) {
+        continue;
+      }
+
+      const endIndex = startIndex + 1 + entry.name.length;
+      const nextCharacter = text[endIndex] || "";
+
+      if (nextCharacter && !/[\s.,!?;:()[\]{}'"`]/.test(nextCharacter)) {
+        continue;
+      }
+
+      return {
+        mentionUser: entry.user,
+        endIndex,
+      };
+    }
+
+    return null;
+  };
+}
+
+function renderCommentContent(content, isDark, mentionUsers, currentUserId) {
+  const text = String(content || "");
+  const resolveMention = createMentionResolver(mentionUsers);
+  const parts = [];
+  let cursor = 0;
+  let partIndex = 0;
+
+  while (cursor < text.length) {
+    const mentionStart = text.indexOf("@", cursor);
+
+    if (mentionStart === -1) {
+      parts.push(text.slice(cursor));
+      break;
+    }
+
+    if (mentionStart > cursor) {
+      parts.push(text.slice(cursor, mentionStart));
+    }
+
+    const resolvedMention = resolveMention(text, mentionStart);
+
+    if (!resolvedMention) {
+      parts.push("@");
+      cursor = mentionStart + 1;
+      continue;
+    }
+
+    const mentionText = text.slice(mentionStart, resolvedMention.endIndex);
+    const profilePath = getProfilePath(resolvedMention.mentionUser.id, currentUserId);
+
+    parts.push(
+      <Link
+        key={`${resolvedMention.mentionUser.id}-${mentionStart}-${partIndex}`}
+        to={profilePath}
+        className={`cursor-pointer font-semibold transition ${
+          isDark ? "text-sky-300 hover:text-sky-200 hover:underline" : "text-[#c446ff] hover:text-[#9d2bd5] hover:underline"
+        }`}
+      >
+        {mentionText}
+      </Link>
+    );
+
+    partIndex += 1;
+    cursor = resolvedMention.endIndex;
+  }
+
+  return parts;
+}
+
+function CommentList({ comments, loading, onDeleteComment, onReplyComment, replyingToCommentId, focusedCommentId = "", renderReplyForm, mentionUsers = [] }) {
   const { user } = useAuth();
   const { isDark } = useTheme();
   const [activeMenuCommentId, setActiveMenuCommentId] = useState("");
@@ -249,7 +320,7 @@ function CommentList({ comments, loading, onDeleteComment, onReplyComment, reply
                 isDark ? "bg-slate-900 text-slate-200" : "bg-slate-100 text-slate-700"
               }`}>
                 <p className="text-sm leading-6">
-                  {renderCommentContent(comment.content, isDark)}
+                  {renderCommentContent(comment.content, isDark, mentionUsers, user?.id)}
                 </p>
               </div>
               {!isReply ? (

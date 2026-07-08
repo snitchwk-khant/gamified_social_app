@@ -8,14 +8,14 @@ import NetworkService from "../../services/network_service";
 import { createSocialNotification } from "../../services/notifications_service";
 import {
   getPostLoves,
-  getPostReactionSummary,
   parsePostMediaUrls,
   setPostReaction,
-  subscribeToPostLikes,
 } from "../../services/post_service";
 import { getProfilePath } from "../../utils/profile_path";
 import CommentForm from "./comment_form";
 import CommentList from "./comment_list";
+
+const SOCIAL_FEED_REALTIME_EVENT = "social-feed-realtime";
 
 function formatRelativeTime(dateString) {
   const diffMs = Date.now() - new Date(dateString).getTime();
@@ -519,21 +519,6 @@ function PostCard({
   }, [id, likeCount, reactionsCount, userReaction]);
 
   useEffect(() => {
-    if (!id) {
-      return undefined;
-    }
-
-    return subscribeToPostLikes(id, async () => {
-      const summary = await getPostReactionSummary(id);
-      setHasLoved(Boolean(summary.user_reaction));
-      setCurrentLoveCount(Number(summary.reactions_count || summary.like_count || 0));
-      if (typeof onReactionUpdated === "function") {
-        onReactionUpdated(id, summary);
-      }
-    });
-  }, [id, onReactionUpdated]);
-
-  useEffect(() => {
     if (!user?.id) {
       return;
     }
@@ -661,48 +646,47 @@ function PostCard({
     loadComments();
     loadMentionUsers();
 
-    const channel = supabase
-      .channel(`comments-${id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "comments",
-          filter: `post_id=eq.${id}`,
-        },
-        async (payload) => {
-          if (payload.eventType === "DELETE") {
-            const deletedCommentId = payload.old?.id;
+    const handleRealtimeComment = async (event) => {
+      const payload = event?.detail;
+      const payloadPostId = payload?.new?.post_id || payload?.old?.post_id;
 
-            if (!deletedCommentId) return;
+      if (payloadPostId !== id) {
+        return;
+      }
 
-            setComments((currentComments) => {
-              const nextComments = currentComments.filter((comment) => comment.id !== deletedCommentId && comment.parent_comment_id !== deletedCommentId);
-              const removedCount = currentComments.length - nextComments.length;
+      if (payload.eventType === "DELETE") {
+        const deletedCommentId = payload.old?.id;
 
-              if (removedCount) {
-                setCommentCount((currentCount) => Math.max(0, Number(currentCount || 0) - removedCount));
-              }
+        if (!deletedCommentId) return;
 
-              return nextComments;
-            });
-            return;
+        setComments((currentComments) => {
+          const nextComments = currentComments.filter((comment) => comment.id !== deletedCommentId && comment.parent_comment_id !== deletedCommentId);
+          const removedCount = currentComments.length - nextComments.length;
+
+          if (removedCount) {
+            setCommentCount((currentCount) => Math.max(0, Number(currentCount || 0) - removedCount));
           }
 
-          if (payload.new?.id) {
-            const [formattedComment] = await formatCommentRows([payload.new]);
+          return nextComments;
+        });
+        console.log("STATE UPDATED", { source: "comment_sheet_delete", postId: id, commentId: deletedCommentId });
+        return;
+      }
 
-            if (formattedComment) {
-              upsertComment(formattedComment);
-            }
-          }
+      if (payload.new?.id) {
+        const [formattedComment] = await formatCommentRows([payload.new]);
+
+        if (formattedComment) {
+          upsertComment(formattedComment);
+          console.log("STATE UPDATED", { source: "comment_sheet_upsert", postId: id, commentId: formattedComment.id });
         }
-      )
-      .subscribe();
+      }
+    };
+
+    window.addEventListener(SOCIAL_FEED_REALTIME_EVENT, handleRealtimeComment);
 
     return () => {
-      supabase.removeChannel(channel);
+      window.removeEventListener(SOCIAL_FEED_REALTIME_EVENT, handleRealtimeComment);
     };
   }, [commentOpen, id]);
 
@@ -1318,6 +1302,7 @@ function PostCard({
                 onReplyComment={setReplyingToComment}
                 replyingToCommentId={replyingToComment?.id || ""}
                 focusedCommentId={focusedCommentId}
+                mentionUsers={mentionUsers}
                 renderReplyForm={(comment) => (
                   <CommentForm
                     onSubmit={(content, isAnonymous) => handleCommentSubmit(content, isAnonymous, comment.id)}

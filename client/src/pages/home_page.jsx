@@ -14,6 +14,7 @@ import { getProfilePath } from "../utils/profile_path";
 
 const STORY_CARD_STEP_PX = 250;
 const STORY_TEXT_MAX_LENGTH = 300;
+const SOCIAL_FEED_REALTIME_EVENT = "social-feed-realtime";
 const STORY_BACKGROUND_OPTIONS = [
   {
     id: "purple",
@@ -233,14 +234,120 @@ function HomePage() {
     );
   }, [user?.avatar_url, user?.id]);
 
+  const handlePostCommentCreated = useCallback((postId) => {
+    if (!postId) {
+      return;
+    }
+
+    setPosts((prevPosts) =>
+      prevPosts.map((post) => {
+        if (post.id !== postId) {
+          return post;
+        }
+
+        return {
+          ...post,
+          comments_count: Number(post.comments_count || 0) + 1,
+        };
+      })
+    );
+    console.log("STATE UPDATED", { source: "home_comment_count_optimistic", postId });
+  }, []);
+
+  const handlePostReactionUpdated = useCallback((postId, summary) => {
+    if (!postId || !summary) {
+      return;
+    }
+
+    setPosts((prevPosts) =>
+      prevPosts.map((post) => {
+        if (post.id !== postId) {
+          return post;
+        }
+
+        return {
+          ...post,
+          reaction_counts: summary.reaction_counts ?? post.reaction_counts,
+          reactions_count: Number(summary.reactions_count ?? summary.like_count ?? post.reactions_count ?? 0),
+          like_count: Number(summary.like_count ?? summary.reactions_count ?? post.like_count ?? 0),
+          user_reaction: summary.user_reaction ?? null,
+        };
+      })
+    );
+    console.log("STATE UPDATED", { source: "home_reaction_summary", postId });
+  }, []);
+
   useEffect(() => {
     loadPosts();
     loadAnnouncements();
     loadStories();
 
-    const unsubscribe = postService.subscribeToPosts(() => {
-      loadPosts();
-    });
+    const socialChannel = supabase
+      .channel("home-social-feed-realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "posts",
+        },
+        () => {
+          loadPosts();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "post_reactions",
+        },
+        async (payload) => {
+          console.log("REALTIME EVENT", {
+            channel: "home-social-feed-realtime",
+            table: "post_reactions",
+            eventType: payload?.eventType,
+          });
+
+          const postId = payload?.new?.post_id || payload?.old?.post_id;
+
+          if (!postId) {
+            return;
+          }
+
+          const summary = await postService.getPostReactionSummary(postId);
+          handlePostReactionUpdated(postId, summary);
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "comments",
+        },
+        (payload) => {
+          console.log("REALTIME EVENT", {
+            channel: "home-social-feed-realtime",
+            table: "comments",
+            eventType: payload?.eventType,
+          });
+
+          const postId = payload?.new?.post_id || payload?.old?.post_id;
+
+          if (!postId) {
+            return;
+          }
+
+          window.dispatchEvent(new CustomEvent(SOCIAL_FEED_REALTIME_EVENT, { detail: payload }));
+          loadPosts();
+        }
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          console.log("SUBSCRIBED", { channel: "home-social-feed-realtime" });
+        }
+      });
 
     const unsubscribeStories = storiesService.subscribeToStories((payload) => {
       if (!payload?.eventType) {
@@ -302,28 +409,12 @@ function HomePage() {
       });
     });
 
-    const commentsChannel = supabase
-      .channel("comments-post-counts")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "comments",
-        },
-        () => {
-          loadPosts();
-        }
-      )
-      .subscribe();
-
     return () => {
-      if (typeof unsubscribe === "function") unsubscribe();
+      supabase.removeChannel(socialChannel);
       if (typeof unsubscribeStories === "function") unsubscribeStories();
       if (typeof unsubscribeStoryViews === "function") unsubscribeStoryViews();
-      supabase.removeChannel(commentsChannel);
     };
-  }, [loadAnnouncements, loadPosts, loadStories, user?.id]);
+  }, [handlePostReactionUpdated, loadAnnouncements, loadPosts, loadStories, user?.id]);
 
   useEffect(() => {
     setStoryRailIndex((currentIndex) => Math.min(currentIndex, stories.length));
@@ -530,47 +621,6 @@ function HomePage() {
     },
     []
   );
-
-  const handlePostCommentCreated = useCallback((postId) => {
-    if (!postId) {
-      return;
-    }
-
-    setPosts((prevPosts) =>
-      prevPosts.map((post) => {
-        if (post.id !== postId) {
-          return post;
-        }
-
-        return {
-          ...post,
-          comments_count: Number(post.comments_count || 0) + 1,
-        };
-      })
-    );
-  }, []);
-
-  const handlePostReactionUpdated = useCallback((postId, summary) => {
-    if (!postId || !summary) {
-      return;
-    }
-
-    setPosts((prevPosts) =>
-      prevPosts.map((post) => {
-        if (post.id !== postId) {
-          return post;
-        }
-
-        return {
-          ...post,
-          reaction_counts: summary.reaction_counts ?? post.reaction_counts,
-          reactions_count: Number(summary.reactions_count ?? summary.like_count ?? post.reactions_count ?? 0),
-          like_count: Number(summary.like_count ?? summary.reactions_count ?? post.like_count ?? 0),
-          user_reaction: summary.user_reaction ?? null,
-        };
-      })
-    );
-  }, []);
 
   return (
     <div className="flex h-full min-h-[calc(100vh-64px)] min-w-0 flex-col xl:w-full xl:max-w-[760px] xl:pb-8">
