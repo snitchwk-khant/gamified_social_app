@@ -245,6 +245,7 @@ function ShopProfilePage() {
     if (bestRecord) {
       return {
         achievement: formatAchievement(bestRecord.achievement_percent),
+        employees: bestRecord.employees || [],
         month: formatHistoryMonth(getHistoryLabel(bestRecord)),
       };
     }
@@ -259,6 +260,7 @@ function ShopProfilePage() {
 
     return {
       achievement: bestMockRecord.achievement,
+      employees: bestMockRecord.employees || mockProfileData.employees,
       month: formatHistoryMonth(bestMockRecord.label),
     };
   }, [mockProfileData.history, sharedHistoryRecords]);
@@ -267,7 +269,7 @@ function ShopProfilePage() {
     <section className="space-y-6">
       <ShopHeader shop={profileData} isDark={isDark} userId={user?.id} />
       <ProgressSection shop={profileData} isDark={isDark} />
-      <BestOfTheMonthSection bestOfMonth={bestOfMonth} employees={profileData.employees} isDark={isDark} userId={user?.id} />
+      <BestOfTheMonthSection bestOfMonth={bestOfMonth} isDark={isDark} userId={user?.id} />
       <MonthlyHistorySection items={monthlyHistoryItems} isDark={isDark} userId={user?.id} />
     </section>
   );
@@ -326,7 +328,9 @@ function ProgressSection({ shop, isDark }) {
   );
 }
 
-function BestOfTheMonthSection({ bestOfMonth, employees = [], isDark, userId }) {
+function BestOfTheMonthSection({ bestOfMonth, isDark, userId }) {
+  const employees = bestOfMonth?.employees || [];
+
   return (
     <section
       className={`relative overflow-hidden rounded-[30px] border p-6 text-center shadow-2xl transition duration-300 hover:-translate-y-0.5 sm:p-7 ${
@@ -339,7 +343,11 @@ function BestOfTheMonthSection({ bestOfMonth, employees = [], isDark, userId }) 
         {bestOfMonth ? (
           <div className="mt-6 flex flex-col items-center">
             <div className="px-4 py-3">
-              <AvatarGroup employees={employees} isDark={isDark} userId={userId} size="team" maxVisible={6} />
+              {employees.length ? (
+                <AvatarGroup employees={employees} isDark={isDark} userId={userId} size="team" maxVisible={6} />
+              ) : (
+                <p className={`text-sm font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>No employees saved for this month</p>
+              )}
             </div>
 
             <p className="mt-5 text-4xl font-black text-[#c446ff]">{bestOfMonth.achievement}</p>

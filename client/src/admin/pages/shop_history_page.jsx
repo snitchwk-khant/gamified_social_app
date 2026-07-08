@@ -4,7 +4,7 @@ import {
   buildSharedShopHistoryRecords,
   deleteShopHistoryEmployees,
   deleteShopSalesTarget,
-  getShopEmployees,
+  getShopHistoryPickerEmployees,
   getSharedShopHistoryRecords,
   getShops,
   saveShopHistoryEmployees,
@@ -177,34 +177,29 @@ function ShopHistoryPage() {
   useEffect(() => {
     let isMounted = true;
 
-    async function loadSelectedShopEmployees() {
-      if (!form.shopId) {
-        setEmployees([]);
-        return;
-      }
-
+    async function loadEmployees() {
       try {
-        const employeeRows = await getShopEmployees(form.shopId);
+        const employeeRows = await getShopHistoryPickerEmployees();
 
         if (isMounted) {
           setEmployees(employeeRows);
         }
       } catch (err) {
-        console.error("Shop employees load error:", err);
+        console.error("Employees load error:", err);
 
         if (isMounted) {
           setEmployees([]);
-          setRecordsError(err?.message || "Unable to load shop employees.");
+          setRecordsError(err?.message || "Unable to load employees.");
         }
       }
     }
 
-    loadSelectedShopEmployees();
+    loadEmployees();
 
     return () => {
       isMounted = false;
     };
-  }, [form.shopId]);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -261,6 +256,19 @@ function ShopHistoryPage() {
   const recordYearOptions = useMemo(() => {
     return [...new Set(records.map((record) => record.year).filter(Boolean))].sort((left, right) => Number(right) - Number(left));
   }, [records]);
+
+  useEffect(() => {
+    if (!form.shopId || !form.month || !form.year) {
+      return;
+    }
+
+    const matchingRecord = records.find((record) => {
+      return record.shopId === form.shopId && record.month === form.month && record.year === form.year;
+    });
+
+    setSelectedEmployeeIds(matchingRecord?.employeeIds || []);
+  }, [form.month, form.shopId, form.year, records]);
+
   const selectedEmployees = useMemo(
     () => selectedEmployeeIds
       .map((employeeId) => employees.find((employee) => employee.id === employeeId))
@@ -341,7 +349,7 @@ function ShopHistoryPage() {
     const hasInvalidEmployee = selectedEmployeeIds.some((employeeId) => !validEmployeeIds.has(employeeId));
 
     if (hasInvalidEmployee) {
-      nextErrors.employees = "Only employees assigned to this shop can be selected.";
+      nextErrors.employees = "Only active employees can be selected.";
     }
 
     return nextErrors;
@@ -552,7 +560,7 @@ function ShopHistoryPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-semibold text-slate-800">Employees</p>
-              <p className="mt-1 text-xs text-slate-500">Select employees currently assigned to this shop.</p>
+              <p className="mt-1 text-xs text-slate-500">Select active employees for this history record.</p>
             </div>
             <button
               type="button"
@@ -600,7 +608,7 @@ function ShopHistoryPage() {
 
                 {!availableEmployees.length ? (
                   <div className="rounded-2xl bg-slate-50 px-4 py-5 text-center text-sm text-slate-500">
-                    {employees.length ? "No more employees available." : "No employees assigned to this shop."}
+                    {employees.length ? "No more employees available." : "No active employees found."}
                   </div>
                 ) : null}
               </div>

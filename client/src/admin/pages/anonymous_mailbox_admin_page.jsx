@@ -15,6 +15,50 @@ function formatDate(value) {
   });
 }
 
+function getSenderName(message) {
+  if (message.is_anonymous !== false) {
+    return "Masked Employee";
+  }
+
+  return message.sender?.full_name || message.sender?.email || "Employee";
+}
+
+function getInitials(name) {
+  return (
+    name
+      ?.split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "E"
+  );
+}
+
+function SenderIdentity({ message }) {
+  const isAnonymous = message.is_anonymous !== false;
+  const name = getSenderName(message);
+
+  return (
+    <div className="flex items-center gap-3">
+      {isAnonymous ? (
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-900 text-sm font-black text-white">
+          ?
+        </div>
+      ) : message.sender?.avatar_url ? (
+        <img src={message.sender.avatar_url} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover" />
+      ) : (
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f6e8ff] text-sm font-black text-[#c446ff]">
+          {getInitials(name)}
+        </div>
+      )}
+      <div className="min-w-0">
+        <p className="truncate text-sm font-semibold text-slate-950">{name}</p>
+        {isAnonymous ? <p className="text-xs text-slate-500">Anonymous</p> : null}
+      </div>
+    </div>
+  );
+}
+
 function AnonymousMailboxAdminPage() {
   const [messages, setMessages] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -57,7 +101,7 @@ function AnonymousMailboxAdminPage() {
         return true;
       }
 
-      return [message.category, message.subject, message.message].some((value) =>
+      return [message.category, message.subject, message.message, getSenderName(message)].some((value) =>
         value?.toString().toLowerCase().includes(normalizedSearch)
       );
     });
@@ -114,7 +158,7 @@ function AnonymousMailboxAdminPage() {
             <article key={message.id} className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold text-slate-950">Masked Employee</p>
+                  <SenderIdentity message={message} />
                   <p className="mt-1 text-xs text-slate-500">{formatDate(message.created_at)}</p>
                 </div>
                 <span className="rounded-full bg-[#f6e8ff] px-3 py-1 text-xs font-semibold text-[#c446ff]">
@@ -156,7 +200,9 @@ function AnonymousMailboxAdminPage() {
               ) : filteredMessages.length ? (
                 filteredMessages.map((message) => (
                   <tr key={message.id} className="align-top text-slate-700">
-                    <td className="px-5 py-4 font-semibold text-slate-950">Masked Employee</td>
+                    <td className="px-5 py-4">
+                      <SenderIdentity message={message} />
+                    </td>
                     <td className="px-5 py-4">
                       <span className="rounded-full bg-[#f6e8ff] px-3 py-1 text-xs font-semibold text-[#c446ff]">
                         {message.category}

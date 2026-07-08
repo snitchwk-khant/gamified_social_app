@@ -224,6 +224,23 @@ export async function getShopEmployees(shopId) {
   }));
 }
 
+export async function getShopHistoryPickerEmployees() {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id,full_name,email,avatar_url,role,shop_id")
+    .eq("role", "employee")
+    .order("full_name", { ascending: true });
+
+  if (error) {
+    throw new Error(error.message || "Unable to load employees.");
+  }
+
+  return (data || []).map((employee) => ({
+    ...employee,
+    current_shop_id: employee.shop_id || null,
+  }));
+}
+
 export async function getShopAssignmentEmployees() {
   const [{ data: employeeRows, error: employeeError }, { data: shopRows, error: shopError }] =
     await Promise.all([
@@ -303,30 +320,8 @@ export async function updateShopEmployees(shopId, employeeIds = []) {
   }
 
   const normalizedEmployeeIds = [...new Set(employeeIds.filter(Boolean))];
-  const currentEmployees = await getShopEmployees(shopId);
-  const selectedEmployeeIds = new Set(normalizedEmployeeIds);
-  const removedEmployeeIds = currentEmployees
-    .filter((employee) => !selectedEmployeeIds.has(employee.id))
-    .map((employee) => employee.id);
 
-  if (removedEmployeeIds.length) {
-    const { error: unassignError } = await supabase
-      .from("profiles")
-      .update({ shop_id: null })
-      .eq("shop_id", shopId)
-      .eq("role", "employee")
-      .in("id", removedEmployeeIds);
-
-    if (unassignError) {
-      throw new Error(unassignError.message || "Unable to remove shop employees.");
-    }
-  }
-
-  if (!normalizedEmployeeIds.length) {
-    return getShopEmployees(shopId);
-  }
-
-  const { error } = await supabase.rpc("assign_shop_employees", {
+  const { data, error } = await supabase.rpc("assign_shop_employees", {
     employee_ids: normalizedEmployeeIds,
     target_shop_id: shopId,
   });
@@ -335,7 +330,10 @@ export async function updateShopEmployees(shopId, employeeIds = []) {
     throw new Error(error.message || "Unable to update shop employees.");
   }
 
-  return getShopEmployees(shopId);
+  return (data || []).map((employee) => ({
+    ...employee,
+    current_shop_id: employee.shop_id,
+  }));
 }
 
 export async function getShopSalesTargets({ month = null, year = null, shopId = null } = {}) {
@@ -671,6 +669,7 @@ export default {
   getShopAssignmentEmployees,
   getShopEmployeeCounts,
   getShopEmployees,
+  getShopHistoryPickerEmployees,
   getShopHistoryEmployees,
   getSharedShopHistoryRecords,
   getShopMonthlyChampion,
