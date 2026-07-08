@@ -267,6 +267,52 @@ async function attachActorProfiles(notifications) {
   }));
 }
 
+async function attachReplyCommentTargets(notifications) {
+  const uniqueNotifications = dedupeNotificationsById(notifications);
+  const parentCommentIds = Array.from(
+    new Set(
+      uniqueNotifications
+        .filter((notification) => notification.type === "comment_reply" && notification.entity_type === "comment")
+        .map((notification) => notification.entity_id)
+        .filter(Boolean)
+    )
+  );
+
+  if (!parentCommentIds.length) {
+    return uniqueNotifications;
+  }
+
+  const { data, error } = await supabase
+    .from("comments")
+    .select("id, post_id")
+    .in("id", parentCommentIds);
+
+  if (error) {
+    logSupabaseError("getNotificationReplyTargets Error", error);
+    return uniqueNotifications;
+  }
+
+  const commentsById = new Map((data || []).map((comment) => [comment.id, comment]));
+
+  return uniqueNotifications.map((notification) => {
+    if (notification.type !== "comment_reply" || notification.entity_type !== "comment") {
+      return notification;
+    }
+
+    const parentComment = commentsById.get(notification.entity_id);
+
+    if (!parentComment?.post_id) {
+      return notification;
+    }
+
+    return {
+      ...notification,
+      post_id: parentComment.post_id,
+      comment_id: notification.entity_id,
+    };
+  });
+}
+
 export async function getMyNotifications() {
   const { data, error } = await getMyNotificationsResult();
 
@@ -301,7 +347,8 @@ export async function getMyNotificationsResult() {
   if (!primary.error) {
     const notifications = (primary.data || []).map(normalizeNotification);
     const notificationsWithActors = await attachActorProfiles(notifications);
-    const notificationsWithReadState = await applyReadStateForUser(notificationsWithActors, user.id);
+    const notificationsWithReplyTargets = await attachReplyCommentTargets(notificationsWithActors);
+    const notificationsWithReadState = await applyReadStateForUser(notificationsWithReplyTargets, user.id);
 
     notifyUnreadNotificationCount(getUnreadCountFromNotifications(notificationsWithReadState));
 
@@ -327,7 +374,8 @@ export async function getMyNotificationsResult() {
     if (!fallback.error) {
       const notifications = (fallback.data || []).map(normalizeNotification);
       const notificationsWithActors = await attachActorProfiles(notifications);
-      const notificationsWithReadState = await applyReadStateForUser(notificationsWithActors, user.id);
+      const notificationsWithReplyTargets = await attachReplyCommentTargets(notificationsWithActors);
+      const notificationsWithReadState = await applyReadStateForUser(notificationsWithReplyTargets, user.id);
 
       notifyUnreadNotificationCount(getUnreadCountFromNotifications(notificationsWithReadState));
 
@@ -545,7 +593,7 @@ export async function createSocialNotification({ recipientId, type, postId, comm
     return { data: null, error: new Error("Missing social notification fields.") };
   }
 
-  if (type === "post_reaction") {
+  if (type === "post_reaction" || type === "post_comment" || type === "comment_reply") {
     return { data: null, error: null };
   }
 
