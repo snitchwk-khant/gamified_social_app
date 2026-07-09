@@ -135,6 +135,15 @@ function HomePage() {
   const [storyViewerStoryId, setStoryViewerStoryId] = useState(null);
   const [storyViewerSession, setStoryViewerSession] = useState(0);
   const [storyRailIndex, setStoryRailIndex] = useState(0);
+  const myActiveStory = useMemo(
+    () => (user?.id ? stories.find((story) => story.user_id === user.id) || null : null),
+    [stories, user?.id]
+  );
+  const visibleStories = useMemo(
+    () => (user?.id ? stories.filter((story) => story.user_id !== user.id) : stories),
+    [stories, user?.id]
+  );
+  const storyRailMaxIndex = visibleStories.length;
 
   const loadStories = useCallback(async () => {
     const requestId = storiesRequestRef.current + 1;
@@ -417,10 +426,10 @@ function HomePage() {
   }, [handlePostReactionUpdated, loadAnnouncements, loadPosts, loadStories, user?.id]);
 
   useEffect(() => {
-    setStoryRailIndex((currentIndex) => Math.min(currentIndex, stories.length));
-  }, [stories.length]);
+    setStoryRailIndex((currentIndex) => Math.min(currentIndex, storyRailMaxIndex));
+  }, [storyRailMaxIndex]);
 
-  const handleOpenStoryPicker = () => {
+  const handleOpenStoryComposer = () => {
     setStoryComposerOpen(true);
     setStoriesError("");
   };
@@ -548,12 +557,22 @@ function HomePage() {
     setStoryViewerOpen(true);
   };
 
+  const handleOpenMyStory = () => {
+    if (!myActiveStory) {
+      handleOpenStoryComposer();
+      return;
+    }
+
+    const storyIndex = stories.findIndex((story) => story.id === myActiveStory.id);
+    handleOpenStoryViewer(Math.max(storyIndex, 0), myActiveStory.id);
+  };
+
   const handlePreviousStoryCard = () => {
     setStoryRailIndex((currentIndex) => Math.max(currentIndex - 1, 0));
   };
 
   const handleNextStoryCard = () => {
-    setStoryRailIndex((currentIndex) => Math.min(currentIndex + 1, stories.length));
+    setStoryRailIndex((currentIndex) => Math.min(currentIndex + 1, storyRailMaxIndex));
   };
 
   const handleCloseStoryViewer = () => {
@@ -626,7 +645,7 @@ function HomePage() {
     <div className="flex h-full min-h-[calc(100vh-64px)] min-w-0 flex-col pb-[calc(5.75rem+var(--safe-area-inset-bottom))] xl:w-full xl:max-w-[760px] xl:pb-8">
       <section
         id="stories-section"
-        className={`mb-2 border-y px-3 py-3 sm:mb-6 sm:rounded-[1.5rem] sm:border sm:p-5 xl:mb-5 xl:p-4 ${
+        className={`relative z-10 mb-4 border-y px-3 py-3 sm:mb-5 sm:rounded-[1.5rem] sm:border sm:p-5 xl:p-4 ${
           isDark ? "border-slate-800 bg-slate-950/90" : "border-slate-200 bg-white"
         }`}
       >
@@ -634,13 +653,13 @@ function HomePage() {
           <p className={`mb-3 text-sm ${isDark ? "text-rose-300" : "text-rose-700"}`}>{storiesError}</p>
         ) : null}
 
-        <div className="relative overflow-hidden">
+        <div className="pointer-events-auto relative z-10 overflow-hidden">
           <button
             type="button"
             aria-label="Previous story card"
             onClick={handlePreviousStoryCard}
             disabled={storyRailIndex === 0}
-            className="absolute left-2 top-1/2 z-20 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-[rgba(40,20,80,.45)] text-sm font-bold text-white shadow-lg shadow-fuchsia-950/20 backdrop-blur-md transition hover:scale-105 hover:brightness-110 disabled:pointer-events-none disabled:opacity-30 sm:flex"
+            className="pointer-events-none absolute left-2 top-1/2 z-20 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-[rgba(40,20,80,.45)] text-sm font-bold text-white shadow-lg shadow-fuchsia-950/20 backdrop-blur-md transition hover:scale-105 hover:brightness-110 disabled:pointer-events-none disabled:opacity-30 sm:pointer-events-auto sm:flex"
           >
             ◀
           </button>
@@ -649,39 +668,111 @@ function HomePage() {
             type="button"
             aria-label="Next story card"
             onClick={handleNextStoryCard}
-            disabled={storyRailIndex >= stories.length}
-            className="absolute right-2 top-1/2 z-20 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-[rgba(40,20,80,.45)] text-sm font-bold text-white shadow-lg shadow-fuchsia-950/20 backdrop-blur-md transition hover:scale-105 hover:brightness-110 disabled:pointer-events-none disabled:opacity-30 sm:flex"
+            disabled={storyRailIndex >= storyRailMaxIndex}
+            className="pointer-events-none absolute right-2 top-1/2 z-20 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-[rgba(40,20,80,.45)] text-sm font-bold text-white shadow-lg shadow-fuchsia-950/20 backdrop-blur-md transition hover:scale-105 hover:brightness-110 disabled:pointer-events-none disabled:opacity-30 sm:pointer-events-auto sm:flex"
           >
             ▶
           </button>
 
           <div
-            className="flex snap-x gap-4 overflow-x-auto scroll-smooth pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-5 sm:overflow-visible sm:transition-transform sm:duration-300 sm:ease-out sm:[transform:translateX(var(--story-offset))]"
-            style={{ "--story-offset": `-${storyRailIndex * STORY_CARD_STEP_PX}px` }}
+            className="pointer-events-auto relative z-10 flex touch-pan-x snap-x gap-4 overflow-x-auto scroll-smooth pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-5 sm:overflow-visible sm:transition-transform sm:duration-300 sm:ease-out sm:[transform:translateX(var(--story-offset))]"
+            style={{
+              "--story-offset": `-${storyRailIndex * STORY_CARD_STEP_PX}px`,
+              WebkitOverflowScrolling: "touch",
+            }}
           >
-            <button
-              type="button"
-              onClick={handleOpenStoryPicker}
-              disabled={storyUploading}
-              className="group flex w-[min(72vw,230px)] shrink-0 snap-start flex-col rounded-[1.625rem] border border-dashed border-slate-300 bg-white p-4 text-left transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-70 sm:w-[230px] sm:p-5"
+            <article
+              role="button"
+              tabIndex={0}
+              onClick={handleOpenMyStory}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  handleOpenMyStory();
+                }
+              }}
+              className="pointer-events-auto relative z-10 flex w-[min(72vw,230px)] shrink-0 touch-manipulation snap-start flex-col rounded-[1.5rem] border border-slate-200 bg-white p-4 text-slate-900 shadow-[0_14px_30px_rgba(15,23,42,0.06)] transition hover:border-slate-300 sm:w-[230px] sm:p-5"
             >
-              <div className="flex min-h-[220px] flex-1 flex-col sm:min-h-[252px]">
-                <div className="flex items-center gap-4">
-                  <div
-                    className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-slate-300 bg-white text-[30px] font-light leading-none text-slate-900"
-                  >
-                    +
-                  </div>
-                  <span className="text-xs font-medium uppercase tracking-[0.42em] text-[#c446ff]">
-                    MY STORY
-                  </span>
+              <div className="flex items-center gap-3.5">
+                <div className="relative h-11 w-11 shrink-0">
+                  {user?.avatar_url ? (
+                    <img
+                      src={user.avatar_url}
+                      alt={user?.full_name || user?.name || "My Story"}
+                      className="h-11 w-11 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700">
+                      {(user?.full_name || user?.name || user?.email || "M").charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  {!myActiveStory ? (
+                    <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-[#c446ff] text-sm font-bold leading-none text-white">
+                      +
+                    </span>
+                  ) : null}
                 </div>
 
-                <div className="mt-5 aspect-square w-full rounded-[18px] border border-dashed border-slate-300 bg-white" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-slate-900">My Story</p>
+                </div>
               </div>
-            </button>
 
-            {stories.map((story, index) => {
+              <div className="relative mt-[18px]">
+                <div className="pointer-events-auto block w-full text-left">
+                  <div className="overflow-hidden rounded-[18px]">
+                    {myActiveStory?.story_type === "text" ? (
+                      <div
+                        className={`flex aspect-square w-full items-center justify-center bg-gradient-to-br p-4 text-center ${getStoryBackgroundClass(
+                          myActiveStory.background_color
+                        )}`}
+                      >
+                        <p className="max-h-full overflow-hidden break-words text-xl font-bold leading-tight text-white">
+                          {myActiveStory.content}
+                        </p>
+                      </div>
+                    ) : myActiveStory?.image_url ? (
+                      myActiveStory.media_type === "video" ? (
+                        <video
+                          src={myActiveStory.image_url}
+                          muted
+                          playsInline
+                          preload="metadata"
+                          className="aspect-square w-full object-cover"
+                        />
+                      ) : (
+                        <img
+                          src={myActiveStory.image_url}
+                          alt="My story"
+                          className="aspect-square w-full object-cover"
+                        />
+                      )
+                    ) : (
+                      <div className="flex aspect-square w-full items-center justify-center border border-dashed border-slate-300 bg-slate-50 text-5xl font-light text-slate-500">
+                        +
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {myActiveStory ? (
+                  <button
+                    type="button"
+                    aria-label="Add another story"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      handleOpenStoryComposer();
+                    }}
+                    className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-[#c446ff] text-2xl font-bold leading-none text-white shadow-lg shadow-fuchsia-950/20 transition hover:scale-105"
+                  >
+                    +
+                  </button>
+                ) : null}
+              </div>
+            </article>
+
+            {visibleStories.map((story) => {
               const fullName = story.profile?.full_name || story.author_name || "";
               const avatarUrl = story.profile?.avatar_url ?? story.author_avatar ?? null;
               const initials = fullName
@@ -695,11 +786,12 @@ function HomePage() {
 
               const profilePath = story.user_id ? getProfilePath(story.user_id, user?.id) : null;
               const isStoryOwner = Boolean(user?.id && story.user_id === user.id);
+              const viewerIndex = stories.findIndex((item) => item.id === story.id);
 
               return (
                 <article
                   key={story.id}
-                  className="flex w-[min(72vw,230px)] shrink-0 snap-start flex-col rounded-[1.5rem] border border-slate-200 bg-white p-4 text-slate-900 shadow-[0_14px_30px_rgba(15,23,42,0.06)] sm:w-[230px] sm:p-5"
+                  className="pointer-events-auto relative z-10 flex w-[min(72vw,230px)] shrink-0 snap-start flex-col rounded-[1.5rem] border border-slate-200 bg-white p-4 text-slate-900 shadow-[0_14px_30px_rgba(15,23,42,0.06)] sm:w-[230px] sm:p-5"
                 >
                   <div className="flex items-center gap-3.5">
                     {profilePath ? (
@@ -763,8 +855,8 @@ function HomePage() {
 
                   <button
                     type="button"
-                    onClick={() => handleOpenStoryViewer(index, story.id)}
-                    className="mt-[18px] block text-left"
+                    onClick={() => handleOpenStoryViewer(Math.max(viewerIndex, 0), story.id)}
+                    className="pointer-events-auto mt-[18px] block touch-manipulation text-left"
                   >
                     <div className="overflow-hidden rounded-[18px]">
                       {story.story_type === "text" ? (

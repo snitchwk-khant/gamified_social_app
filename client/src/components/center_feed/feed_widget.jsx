@@ -45,7 +45,7 @@ function FeedWidget({
   });
 
   return (
-    <div className="flex min-h-full flex-col gap-2 sm:gap-6">
+    <div className="flex min-h-full flex-col gap-4 sm:gap-5">
       <FeedHeader title="Team feed" subtitle="Daily collaboration" />
 
       {announcementsLoading && visibleAnnouncements.length === 0 ? (

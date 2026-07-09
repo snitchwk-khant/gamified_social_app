@@ -186,7 +186,7 @@ function PostForm({ value, onChange, onSubmit }) {
       )}
 
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <div className={`hidden flex-wrap items-center gap-4 text-sm sm:flex ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+        <div className={`flex flex-wrap items-center gap-4 text-sm ${isDark ? "text-slate-300" : "text-slate-700"}`}>
           <span className={`${isDark ? "text-slate-400" : "text-slate-500"}`}>Post as</span>
 
           <div className="flex flex-wrap items-center gap-2">

@@ -5,7 +5,7 @@ function FeedHeader({ subtitle }) {
 
   return (
     <div
-      className={`mb-2 flex flex-col gap-2 border-y px-3 py-3 sm:mb-5 sm:rounded-2xl sm:border sm:p-6 ${
+      className={`flex flex-col gap-2 border-y px-3 py-3 sm:rounded-2xl sm:border sm:p-6 ${
         isDark
           ? "border-slate-800 bg-slate-950/90 shadow-lg shadow-slate-950/20"
           : "border-slate-200 bg-white shadow-sm"
