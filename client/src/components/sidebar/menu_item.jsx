@@ -20,7 +20,7 @@ function MenuItem({ icon, title, to, badge = 0 }) {
         }`
       }
     >
-      <span className="w-7 text-center text-2xl leading-none transition-transform duration-200 group-hover/menu:scale-105">{icon}</span>
+      <span className="grid h-7 w-7 shrink-0 place-items-center text-center text-2xl leading-none transition-transform duration-200 group-hover/menu:scale-105">{icon}</span>
       <span className="min-w-0 flex-1 truncate">
         {title}
       </span>

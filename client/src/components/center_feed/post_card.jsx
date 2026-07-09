@@ -87,7 +87,7 @@ function FeedVideoPlayer({ src, isDark }) {
   }
 
   return (
-    <div className="relative flex justify-center overflow-hidden rounded-2xl bg-black xl:items-center">
+    <div className="relative flex justify-center overflow-hidden bg-black sm:rounded-2xl xl:items-center">
       <video
         ref={videoRef}
         src={src}
@@ -310,7 +310,7 @@ function FeedImageCarousel({ urls, isDark }) {
   return (
     <>
       <div
-        className="relative overflow-hidden rounded-2xl touch-pan-y xl:bg-black"
+        className="relative overflow-hidden touch-pan-y sm:rounded-2xl xl:bg-black"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
@@ -465,6 +465,8 @@ function PostCard({
   const [hasLoved, setHasLoved] = useState(Boolean(userReaction));
   const [loveToggling, setLoveToggling] = useState(false);
   const [loveAnimating, setLoveAnimating] = useState(false);
+  const [bodyExpanded, setBodyExpanded] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [commentSheetKeyboardOffset, setCommentSheetKeyboardOffset] = useState(0);
   const commentSheetTouchStartYRef = useRef(null);
   const maskedAvatarPath = "/masked-avatar.jpg";
@@ -472,6 +474,9 @@ function PostCard({
   const canViewLoveList = canDelete;
   const mediaUrls = useMemo(() => parsePostMediaUrls(imageUrl), [imageUrl]);
   const isVideoPost = mediaUrls.length === 1 && isPostVideoUrl(mediaUrls[0]);
+  const normalizedBody = body || "";
+  const shouldCollapseBody = normalizedBody.length > 260;
+  const mobileBody = shouldCollapseBody && !bodyExpanded ? `${normalizedBody.slice(0, 260).trimEnd()}...` : normalizedBody;
 
   useEffect(() => {
     setCommentCount(commentsCount);
@@ -1001,14 +1006,18 @@ function PostCard({
 
   return (
     <article
-      className={`py-3 sm:py-5 xl:mx-auto xl:w-full xl:rounded-2xl xl:border xl:p-4 xl:shadow-sm ${
-        isDark ? "xl:border-slate-800 xl:bg-slate-950" : "xl:border-slate-200 xl:bg-white"
+      className={`py-2 sm:py-5 xl:mx-auto xl:w-full xl:rounded-2xl xl:border xl:p-4 xl:shadow-sm ${
+        isDark ? "bg-slate-950 xl:border-slate-800 xl:bg-slate-950" : "bg-white xl:border-slate-200 xl:bg-white"
       }`}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2 px-3 sm:gap-4 sm:px-0">
-        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-          {(() => {
-            const displayName = profile?.full_name || authorName || "";
+      <div className="flex items-start justify-between gap-2 px-3 sm:gap-4 sm:px-0">
+        {(() => {
+          const displayName = profile?.full_name || authorName || "";
+          const username = isAnonymous ? "@masked" : profile?.email?.split("@")[0] || authorName?.split(/\s+/).join("").toLowerCase() || "gemify";
+
+          return (
+            <div className="flex min-w-0 items-start gap-2.5 sm:gap-3">
+              {(() => {
             const displayAvatar = profile?.avatar_url ?? authorAvatar ?? null;
             const initial = (displayName?.charAt(0) || "").toUpperCase();
             const profilePath = !isAnonymous && authorUserId ? getProfilePath(authorUserId, user?.id) : null;
@@ -1058,37 +1067,100 @@ function PostCard({
             ) : (
               avatarFallback
             );
-          })()}
+              })()}
 
-          {isAnonymous || !authorUserId ? (
-            <p className={`truncate text-sm font-medium ${isDark ? "text-slate-200" : "text-slate-900"}`}>
-              {isAnonymous ? "Masked" : profile?.full_name || authorName}
-            </p>
-          ) : (
-            <Link
-              to={getProfilePath(authorUserId, user?.id)}
-              className={`truncate text-sm font-medium transition ${
-                isDark ? "text-slate-200 hover:text-sky-300" : "text-slate-900 hover:text-[#c446ff]"
-              }`}
-            >
-              {profile?.full_name || authorName}
-            </Link>
-          )}
+              <div className="min-w-0">
+                {isAnonymous || !authorUserId ? (
+                  <p className={`truncate text-[15px] font-semibold leading-5 ${isDark ? "text-slate-100" : "text-slate-950"}`}>
+                    {isAnonymous ? "Masked" : displayName}
+                  </p>
+                ) : (
+                  <Link
+                    to={getProfilePath(authorUserId, user?.id)}
+                    className={`block truncate text-[15px] font-semibold leading-5 transition ${
+                      isDark ? "text-slate-100 hover:text-sky-300" : "text-slate-950 hover:text-[#c446ff]"
+                    }`}
+                  >
+                    {displayName}
+                  </Link>
+                )}
+                <p className={`truncate text-xs leading-4 ${isDark ? "text-slate-500" : "text-slate-500"}`}>
+                  @{username} · {date}
+                </p>
+              </div>
+            </div>
+          );
+        })()}
+
+        <div className="relative shrink-0">
+          <button
+            type="button"
+            onClick={() => setMoreOpen((current) => !current)}
+            className={`flex h-9 w-9 items-center justify-center rounded-full text-xl leading-none transition ${
+              isDark ? "text-slate-400 hover:bg-slate-900 hover:text-slate-100" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+            }`}
+            aria-label="More post options"
+          >
+            ⋯
+          </button>
+          {moreOpen ? (
+            <div className={`absolute right-0 top-10 z-10 min-w-32 overflow-hidden rounded-xl border shadow-lg ${
+              isDark ? "border-slate-800 bg-slate-900 text-slate-100" : "border-slate-200 bg-white text-slate-900"
+            }`}>
+              {canDelete ? (
+                <>
+                  {currentLoveCount ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMoreOpen(false);
+                        handleLoveCountClick();
+                      }}
+                      className={`block w-full px-4 py-2.5 text-left text-sm font-semibold transition ${
+                        isDark ? "hover:bg-slate-800" : "hover:bg-slate-50"
+                      }`}
+                    >
+                      View loves
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMoreOpen(false);
+                      handleDeletePost();
+                    }}
+                    disabled={deleting}
+                    className={`block w-full px-4 py-2.5 text-left text-sm font-semibold transition disabled:opacity-60 ${
+                      isDark ? "text-rose-200 hover:bg-slate-800" : "text-rose-700 hover:bg-rose-50"
+                    }`}
+                  >
+                    {deleting ? "Deleting..." : "Delete"}
+                  </button>
+                </>
+              ) : (
+                <span className={`block px-4 py-2.5 text-sm ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                  No actions
+                </span>
+              )}
+            </div>
+          ) : null}
         </div>
-
-        <span
-          className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] sm:px-3 sm:py-1 sm:text-xs ${
-            isDark ? "bg-slate-800 text-slate-400" : "bg-slate-100 text-slate-500"
-          }`}
-        >
-          {date}
-        </span>
       </div>
 
       {body ? (
-        <p className={`mt-2.5 whitespace-pre-wrap px-3 text-sm sm:mt-4 sm:px-0 sm:text-base ${isDark ? "text-slate-300" : "text-slate-700"}`}>
-          {body}
-        </p>
+        <div className={`mt-2 whitespace-pre-wrap px-3 text-[16px] leading-6 sm:mt-4 sm:px-0 sm:text-base ${isDark ? "text-slate-200" : "text-slate-800"}`}>
+          <p className="sm:hidden">{mobileBody}</p>
+          <p className="hidden sm:block">{body}</p>
+          {shouldCollapseBody ? (
+            <button
+              type="button"
+              onClick={() => setBodyExpanded((current) => !current)}
+              className={`mt-1 text-sm font-semibold sm:hidden ${isDark ? "text-slate-400" : "text-slate-500"}`}
+            >
+              {bodyExpanded ? "See Less" : "See More"}
+            </button>
+          ) : null}
+        </div>
       ) : null}
 
       {imageUrl ? (
@@ -1101,77 +1173,46 @@ function PostCard({
         </div>
       ) : null}
 
-      <div className="mt-3 flex flex-wrap items-center gap-2.5 px-3 sm:mt-5 sm:gap-4 sm:px-0">
-        <div className="flex items-center gap-1">
+      <div className={`mt-2 border-t px-3 pt-1 sm:mt-5 sm:px-0 sm:pt-2 ${isDark ? "border-slate-800" : "border-slate-100"}`}>
+        <div className="flex items-center justify-start gap-4 sm:gap-5">
           <button
             type="button"
             onClick={handleLoveClick}
             disabled={loveToggling}
             aria-label={hasLoved ? "Remove Love" : "Love post"}
-            className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-70 sm:h-10 sm:w-10 ${
+            title={hasLoved ? "Remove Love" : "Love post"}
+            className={`flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-full px-2.5 text-sm font-semibold transition duration-150 active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-70 ${
               hasLoved
                 ? isDark
-                  ? "bg-rose-600 text-white hover:bg-rose-500"
-                  : "bg-rose-100 text-rose-700 hover:bg-rose-200"
-                : isDark
-                  ? "bg-slate-800 text-white hover:bg-rose-600"
+                  ? "bg-[#c446ff]/15 text-[#f2c4ff] hover:bg-[#c446ff]/20"
                   : "bg-[#f6e8ff] text-[#c446ff] hover:bg-[#edd4ff]"
+                : isDark
+                  ? "text-slate-300 hover:bg-slate-900"
+                  : "text-slate-600 hover:bg-slate-50"
             }`}
           >
-            <span
-              className={`inline-block transition-transform duration-200 ${
-                loveAnimating ? "scale-150" : "scale-100"
-              }`}
-            >
+            <span className={`inline-block text-xl leading-none transition-transform duration-200 ${loveAnimating ? "scale-150" : "scale-100"}`}>
               {hasLoved ? "❤️" : "🤍"}
             </span>
+            {currentLoveCount > 0 ? (
+              <span className="min-w-4 text-center text-xs font-bold leading-none opacity-80">{currentLoveCount}</span>
+            ) : null}
           </button>
-          {canViewLoveList && currentLoveCount ? (
-            <button
-              type="button"
-              onClick={handleLoveCountClick}
-              className={`text-sm font-medium leading-none transition hover:text-[#c446ff] ${
-                isDark ? "text-slate-400" : "text-slate-500"
-              }`}
-            >
-              {currentLoveCount}
-            </button>
-          ) : (
-            <span className={`text-sm leading-none ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-              {currentLoveCount}
-            </span>
-          )}
-        </div>
-
-        <button
-          onClick={() => setCommentOpen(true)}
-          className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition sm:px-4 sm:py-2 ${
-            isDark
-              ? "bg-slate-800 text-white hover:bg-sky-500"
-              : "bg-[#f6e8ff] text-[#c446ff] hover:bg-[#edd4ff]"
-          }`}
-        >
-          💬
-        </button>
-
-        <span className={`text-sm ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-          {commentCount} Comments
-        </span>
-
-        {canDelete ? (
           <button
             type="button"
-            onClick={handleDeletePost}
-            disabled={deleting}
-            className={`ml-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-70 sm:ml-auto sm:px-4 sm:py-2 ${
-              isDark
-                ? "bg-slate-800 text-rose-200 hover:bg-rose-950"
-                : "bg-rose-50 text-rose-700 hover:bg-rose-100"
+            onClick={() => setCommentOpen(true)}
+            aria-label="Open comments"
+            title="Open comments"
+            className={`flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-full px-2.5 text-sm font-semibold transition duration-150 active:scale-[0.96] ${
+              isDark ? "text-slate-300 hover:bg-slate-900" : "text-slate-600 hover:bg-slate-50"
             }`}
           >
-            {deleting ? "Deleting..." : "Delete"}
+            <span className="text-xl leading-none">💬</span>
+            {commentCount > 0 ? (
+              <span className="min-w-4 text-center text-xs font-bold leading-none opacity-80">{commentCount}</span>
+            ) : null}
           </button>
-        ) : null}
+        </div>
       </div>
 
       {deleteError ? (

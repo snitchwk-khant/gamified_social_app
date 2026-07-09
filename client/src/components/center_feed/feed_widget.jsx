@@ -45,7 +45,7 @@ function FeedWidget({
   });
 
   return (
-    <div className="flex min-h-full flex-col gap-6">
+    <div className="flex min-h-full flex-col gap-2 sm:gap-6">
       <FeedHeader title="Team feed" subtitle="Daily collaboration" />
 
       {announcementsLoading && visibleAnnouncements.length === 0 ? (
@@ -72,14 +72,14 @@ function FeedWidget({
       ) : null}
 
       {visibleAnnouncements.length > 0 ? (
-        <div className="space-y-3">
+        <div className="space-y-2 px-0 sm:space-y-3">
           {visibleAnnouncements.map((item) => {
             const creatorName = getCreatorName(item);
 
             return (
               <article
                 key={item.id}
-                className={`rounded-2xl border p-4 shadow-[0_12px_30px_rgba(196,70,255,0.08)] ${
+                className={`border-y px-3 py-3 sm:rounded-2xl sm:border sm:p-4 sm:shadow-[0_12px_30px_rgba(196,70,255,0.08)] ${
                   isDark
                     ? "border-fuchsia-500/25 bg-slate-900 text-slate-100"
                     : "border-fuchsia-100 bg-white text-slate-900"

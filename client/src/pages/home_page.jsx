@@ -623,10 +623,10 @@ function HomePage() {
   );
 
   return (
-    <div className="flex h-full min-h-[calc(100vh-64px)] min-w-0 flex-col xl:w-full xl:max-w-[760px] xl:pb-8">
+    <div className="flex h-full min-h-[calc(100vh-64px)] min-w-0 flex-col pb-[calc(5.75rem+var(--safe-area-inset-bottom))] xl:w-full xl:max-w-[760px] xl:pb-8">
       <section
         id="stories-section"
-        className={`mb-6 rounded-[1.5rem] border p-4 sm:p-5 xl:mb-5 xl:p-4 ${
+        className={`mb-2 border-y px-3 py-3 sm:mb-6 sm:rounded-[1.5rem] sm:border sm:p-5 xl:mb-5 xl:p-4 ${
           isDark ? "border-slate-800 bg-slate-950/90" : "border-slate-200 bg-white"
         }`}
       >

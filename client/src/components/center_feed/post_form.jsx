@@ -109,23 +109,36 @@ function PostForm({ value, onChange, onSubmit }) {
 
   return (
     <div
-      className={`rounded-2xl border p-4 transition duration-300 sm:p-6 ${
+      className={`border-y px-3 py-3 transition duration-300 sm:rounded-2xl sm:border sm:p-6 ${
         isDark
-          ? "border-slate-800 bg-slate-900 shadow-lg shadow-slate-950/10 hover:border-slate-700"
-          : "border-slate-200 bg-white shadow-sm hover:border-slate-300"
+          ? "border-slate-800 bg-slate-950 shadow-none sm:bg-slate-900 sm:shadow-lg sm:shadow-slate-950/10 sm:hover:border-slate-700"
+          : "border-slate-200 bg-white shadow-none sm:shadow-sm sm:hover:border-slate-300"
       }`}
     >
-      <textarea
-        rows="4"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder="Share a story, milestone, or update with your team..."
-        className={`w-full resize-none rounded-2xl border px-4 py-4 text-sm outline-none transition ${
-          isDark
-            ? "border-slate-800 bg-slate-950 text-slate-100 focus:border-sky-500"
-            : "border-slate-300 bg-slate-50 text-slate-800 focus:border-[#c446ff] focus:bg-white"
-        }`}
-      />
+      <div className="flex items-start gap-2.5 sm:block">
+        <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full sm:hidden">
+          {user?.avatar_url ? (
+            <img src={user.avatar_url} alt={adminDisplayName} className="h-full w-full object-cover" />
+          ) : (
+            <div className={`flex h-full w-full items-center justify-center text-sm font-semibold ${
+              isDark ? "bg-slate-800 text-slate-100" : "bg-slate-200 text-slate-700"
+            }`}>
+              {adminInitial}
+            </div>
+          )}
+        </div>
+        <textarea
+          rows="2"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="What's on your mind?"
+          className={`min-h-11 w-full resize-none rounded-[22px] border px-4 py-3 text-[15px] leading-6 outline-none transition sm:min-h-[128px] sm:rounded-2xl sm:py-4 sm:text-sm ${
+            isDark
+              ? "border-slate-800 bg-slate-900 text-slate-100 placeholder:text-slate-500 focus:border-sky-500 sm:bg-slate-950"
+              : "border-slate-200 bg-slate-50 text-slate-800 placeholder:text-slate-500 focus:border-[#c446ff] focus:bg-white sm:border-slate-300"
+          }`}
+        />
+      </div>
 
       {previewUrls.length ? (
         <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
@@ -173,7 +186,7 @@ function PostForm({ value, onChange, onSubmit }) {
       )}
 
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <div className={`flex flex-wrap items-center gap-4 text-sm ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+        <div className={`hidden flex-wrap items-center gap-4 text-sm sm:flex ${isDark ? "text-slate-300" : "text-slate-700"}`}>
           <span className={`${isDark ? "text-slate-400" : "text-slate-500"}`}>Post as</span>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -238,7 +251,7 @@ function PostForm({ value, onChange, onSubmit }) {
             type="button"
             onClick={handleOpenImagePicker}
             disabled={publishing}
-            className={`flex-1 rounded-full border px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 sm:flex-none ${
+            className={`min-h-11 flex-1 rounded-full border px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 sm:flex-none sm:py-3 ${
               isDark
                 ? "border-slate-700 bg-slate-950 text-slate-200 hover:bg-slate-800"
                 : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
@@ -251,7 +264,7 @@ function PostForm({ value, onChange, onSubmit }) {
             type="button"
             onClick={handleSubmit}
             disabled={publishing}
-            className={`flex-1 rounded-full px-5 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 sm:flex-none ${
+            className={`min-h-11 flex-1 rounded-full px-5 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 sm:flex-none sm:py-3 ${
               isDark
                 ? "bg-sky-500 text-slate-950 hover:bg-sky-400"
                 : "bg-[#c446ff] text-white hover:bg-[#ad32e3]"

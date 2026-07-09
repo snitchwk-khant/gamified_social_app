@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 26 26" fill="none" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="gemify-shops-main" x1="4.1" y1="4.05" x2="21.9" y2="21.42" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFE66D"/>
+      <stop offset=".38" stop-color="#FFB84D"/>
+      <stop offset=".7" stop-color="#C446FF"/>
+      <stop offset="1" stop-color="#45D6FF"/>
+    </linearGradient>
+  </defs>
+  <path d="M5.15 11.35v8.35c0 .95.77 1.72 1.72 1.72h12.26c.95 0 1.72-.77 1.72-1.72v-8.35" fill="url(#gemify-shops-main)" fill-opacity=".16" stroke="url(#gemify-shops-main)" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M4.1 10.95h17.8L20.55 5.2a1.5 1.5 0 0 0-1.46-1.15H6.91A1.5 1.5 0 0 0 5.45 5.2z" stroke="url(#gemify-shops-main)" stroke-width="2.1" stroke-linejoin="round"/>
+  <path d="M8.1 10.95v1.1a2.35 2.35 0 0 0 4.7 0v-1.1M12.8 10.95v1.1a2.35 2.35 0 0 0 4.7 0v-1.1" stroke="#F6E8FF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M10.25 21.35v-5.25c0-.64.52-1.15 1.15-1.15h3.2c.63 0 1.15.51 1.15 1.15v5.25" stroke="#45D6FF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

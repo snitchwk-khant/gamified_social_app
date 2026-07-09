@@ -275,7 +275,7 @@ function MainLayout() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="welcome-leaderboard-title"
-            className={`relative max-h-[70vh] w-[78vw] max-w-[320px] animate-[welcome-leaderboard-in_180ms_ease-out] overflow-hidden rounded-2xl border p-3 pb-[calc(0.75rem+3px)] shadow-2xl transition-transform duration-[280ms] sm:max-w-[340px] ${
+            className={`relative max-h-[70vh] w-[78vw] max-w-[320px] animate-[welcome-leaderboard-in_180ms_ease-out] overflow-hidden rounded-2xl border p-3 shadow-2xl transition-transform duration-[280ms] sm:max-w-[340px] ${
               isDark ? "border-slate-800 bg-slate-900 text-slate-100" : "border-slate-200 bg-white text-slate-950"
             } ${isHighlightsClosing ? "scale-[0.985]" : "scale-100"}`}
           >
@@ -284,6 +284,13 @@ function MainLayout() {
                 🏆 Welcome Back
               </h2>
               <p className="mt-0.5 text-xs font-semibold text-[#c446ff]">{formatPeriodLabel(leaderboardPeriod)}</p>
+            </div>
+            <div className="mt-2 h-[3px] overflow-hidden rounded-full">
+              <div
+                className={`h-full origin-left rounded-full bg-gradient-to-r from-[#c446ff] via-fuchsia-400 to-sky-400 shadow-[0_0_12px_rgba(196,70,255,0.85)] ${
+                  isHighlightsClosing ? "opacity-0" : "animate-[welcome-leaderboard-progress_5000ms_linear_forwards]"
+                }`}
+              />
             </div>
 
             <div className="mt-3 space-y-1.5">
@@ -448,13 +455,6 @@ function MainLayout() {
               >
                 View Leaderboard
               </button>
-            </div>
-            <div className="absolute inset-x-0 bottom-0 h-[3px] overflow-hidden rounded-b-2xl">
-              <div
-                className={`h-full origin-left rounded-b-2xl bg-gradient-to-r from-[#c446ff] via-fuchsia-400 to-sky-400 shadow-[0_0_12px_rgba(196,70,255,0.85)] ${
-                  isHighlightsClosing ? "opacity-0" : "animate-[welcome-leaderboard-progress_5000ms_linear_forwards]"
-                }`}
-              />
             </div>
           </div>
           <style>

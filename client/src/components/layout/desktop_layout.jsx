@@ -1,17 +1,21 @@
-import { useEffect, useState } from "react";
-import { FiAward, FiBell, FiHome, FiMail, FiUser } from "react-icons/fi";
+import { memo, useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/auth_context";
 import SafeAreaLayout from "./SafeAreaLayout";
 import { useTheme } from "../../context/theme_context";
 import { subscribeToUnreadNotificationCount } from "../../services/notifications_service";
+import homeSvg from "../../assets/icons/home.svg?raw";
+import leaderboardSvg from "../../assets/icons/leaderboard.svg?raw";
+import messagesSvg from "../../assets/icons/messages.svg?raw";
+import notificationsSvg from "../../assets/icons/notifications.svg?raw";
+import profileSvg from "../../assets/icons/profile.svg?raw";
 
 const MOBILE_NAV_ITEMS = [
-  { label: "Home", icon: FiHome, to: "/home" },
-  { label: "Leaderboard", icon: FiAward, to: "/leaderboard" },
-  { label: "Notifications", icon: FiBell, to: "/notifications", badge: "notifications" },
-  { label: "Messages", icon: FiMail, to: "/anonymous-mailbox" },
-  { label: "Profile", icon: FiUser, to: "/profile" },
+  { label: "Home", svg: homeSvg, to: "/home" },
+  { label: "Leaderboard", svg: leaderboardSvg, to: "/leaderboard" },
+  { label: "Notifications", svg: notificationsSvg, to: "/notifications", badge: "notifications" },
+  { label: "Messages", svg: messagesSvg, to: "/anonymous-mailbox" },
+  { label: "Profile", to: "/profile", avatar: true },
 ];
 
 const MOBILE_TAB_SCROLL_PREFIX = "gemify-mobile-tab-scroll:";
@@ -43,9 +47,49 @@ function saveMobileTabScroll(location) {
   }
 }
 
+const MobileNavSvgIcon = memo(function MobileNavSvgIcon({ active = false, label, svg }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`inline-flex h-8 w-8 shrink-0 items-center justify-center leading-none transition duration-200 ease-out [&_svg]:block [&_svg]:h-full [&_svg]:w-full ${
+        active ? "scale-105 opacity-100 brightness-110" : "scale-100 opacity-70 brightness-95"
+      }`}
+      data-mobile-nav-icon={label}
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
+  );
+});
+
+const MobileProfileAvatar = memo(function MobileProfileAvatar({ active, user }) {
+  const displayName = user?.full_name || user?.name || user?.email?.split("@")[0] || "Team member";
+  const avatarStateClass = active ? "scale-105 opacity-100 brightness-110" : "scale-100 opacity-70 brightness-95";
+
+  return (
+    <span
+      className={`grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full transition duration-200 ease-out ${avatarStateClass}`}
+    >
+      {user?.avatar_url ? (
+        <img
+          src={user.avatar_url}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="h-full w-full rounded-full object-cover"
+        />
+      ) : (
+        <span
+          aria-label={displayName}
+          className="inline-flex h-8 w-8 items-center justify-center [&_svg]:block [&_svg]:h-full [&_svg]:w-full"
+          data-mobile-nav-icon="Profile fallback"
+          dangerouslySetInnerHTML={{ __html: profileSvg }}
+        />
+      )}
+    </span>
+  );
+});
+
 function MobileBottomNavigation() {
   const { user } = useAuth();
-  const { isDark } = useTheme();
   const location = useLocation();
   const [isMobile, setIsMobile] = useState(isMobileViewport);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
@@ -115,42 +159,44 @@ function MobileBottomNavigation() {
 
   return (
     <nav
-      className={`fixed inset-x-3 bottom-[calc(max(var(--safe-area-inset-bottom),0px)+0.75rem)] z-50 mx-auto max-w-md rounded-full border px-2 py-2 shadow-2xl backdrop-blur-2xl transition-colors duration-200 xl:hidden ${
-        isDark ? "border-white/10 bg-slate-950/70 shadow-slate-950/45" : "border-white/70 bg-white/70 shadow-slate-900/15"
-      }`}
+      className="fixed inset-x-0 bottom-[calc(max(var(--safe-area-inset-bottom),0px)+0.875rem)] z-50 mx-auto h-12 px-5 xl:hidden"
       aria-label="Primary mobile navigation"
     >
-      <div className="grid grid-cols-5 gap-1">
+      <div className="mx-auto grid h-full max-w-md grid-cols-5 items-center gap-1">
         {MOBILE_NAV_ITEMS.map((item) => {
-          const Icon = item.icon;
           const badge = item.badge === "notifications" ? unreadNotifications : 0;
 
           return (
             <NavLink
               key={item.label}
               to={item.to}
+              aria-label={item.label}
+              title={item.label}
               onClick={() => saveMobileTabScroll(location)}
               className={({ isActive }) =>
-                `relative flex min-h-14 flex-col items-center justify-center rounded-2xl px-1 text-[9px] font-semibold transition duration-200 ease-out ${
-                  isActive
-                    ? isDark
-                      ? "bg-sky-500 text-slate-950 shadow-lg shadow-sky-500/20"
-                      : "bg-[#f6e8ff] text-[#c446ff] shadow-lg shadow-[#c446ff]/10"
-                    : isDark
-                      ? "text-slate-300 hover:bg-slate-900 hover:text-white"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                `relative flex h-12 w-full items-center justify-center px-1 transition duration-200 ease-out ${
+                  isActive ? "" : "hover:opacity-100"
                 }`
               }
             >
-              <span className="relative grid h-6 w-6 place-items-center">
-                <Icon className="h-5 w-5" aria-hidden="true" />
-                {badge > 0 ? (
-                  <span className="absolute -right-2 -top-2 min-w-5 rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-black leading-none text-white shadow-lg shadow-rose-500/25">
-                    {formattedUnreadNotifications}
-                  </span>
-                ) : null}
-              </span>
-              <span className="mt-1 max-w-full truncate">{item.label}</span>
+              {({ isActive }) => (
+                <span className="relative grid h-9 w-9 place-items-center">
+                  {item.avatar ? (
+                    <MobileProfileAvatar active={isActive} user={user} />
+                  ) : (
+                    <MobileNavSvgIcon
+                      active={isActive}
+                      label={item.label}
+                      svg={item.svg}
+                    />
+                  )}
+                  {badge > 0 ? (
+                    <span className="absolute -right-2 -top-2 min-w-5 rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-black leading-none text-white shadow-lg shadow-rose-500/25">
+                      {formattedUnreadNotifications}
+                    </span>
+                  ) : null}
+                </span>
+              )}
             </NavLink>
           );
         })}
@@ -178,12 +224,12 @@ function DesktopLayout({
   return (
     <SafeAreaLayout className={`min-h-screen overflow-x-hidden ${isDark ? "bg-slate-950 text-slate-100" : "bg-[#f0f2f5] text-slate-800"}`}>
       <div
-        className={`mx-auto grid min-h-screen w-full grid-cols-1 gap-5 overflow-visible px-3 pb-[calc(6.5rem+var(--safe-area-inset-bottom))] pt-3 sm:px-4 sm:pt-4 ${
+        className={`mx-auto grid min-h-screen w-full grid-cols-1 overflow-visible pb-[calc(6.5rem+var(--safe-area-inset-bottom))] ${
           isHomeRoute
-            ? "xl:h-screen xl:max-w-[1600px] xl:grid-cols-[320px_minmax(0,760px)_320px] xl:justify-center xl:gap-6 xl:overflow-hidden xl:px-0 xl:pb-4 xl:pt-4"
+            ? "gap-0 px-0 pt-0 sm:gap-5 sm:px-4 sm:pt-4 xl:h-screen xl:max-w-[1600px] xl:grid-cols-[320px_minmax(0,760px)_320px] xl:justify-center xl:gap-6 xl:overflow-hidden xl:px-0 xl:pb-4 xl:pt-4"
             : usesWideSidebarLayout
-              ? "xl:max-w-[1600px] xl:grid-cols-[320px_minmax(0,1fr)] xl:justify-center xl:gap-6 xl:px-6 xl:pb-6 xl:pt-6"
-            : "xl:h-screen xl:overflow-hidden xl:px-6 xl:pb-4"
+              ? "gap-5 px-3 pt-3 sm:px-4 sm:pt-4 xl:max-w-[1600px] xl:grid-cols-[320px_minmax(0,1fr)] xl:justify-center xl:gap-6 xl:px-6 xl:pb-6 xl:pt-6"
+            : "gap-5 px-3 pt-3 sm:px-4 sm:pt-4 xl:h-screen xl:overflow-hidden xl:px-6 xl:pb-4"
         }`}
       >
         <aside
@@ -199,18 +245,14 @@ function DesktopLayout({
         </aside>
 
         <main
-          className={`min-h-0 overflow-hidden rounded-2xl border p-3 sm:p-4 xl:col-start-2 xl:row-start-1 xl:min-w-0 xl:w-full ${
-            isDark
-              ? "border-slate-800 bg-slate-950 shadow-2xl shadow-slate-950/30"
-              : "border-slate-200 bg-white shadow-sm"
-          } ${
+          className={`min-h-0 overflow-hidden xl:col-start-2 xl:row-start-1 xl:min-w-0 xl:w-full ${
             isHomeRoute
               ? isDark
-                ? "xl:rounded-none xl:border-0 xl:bg-transparent xl:p-0 xl:shadow-none"
-                : "xl:rounded-none xl:border-0 xl:bg-transparent xl:p-0 xl:shadow-none"
+                ? "border-0 bg-transparent p-0 shadow-none sm:rounded-2xl sm:border sm:border-slate-800 sm:bg-slate-950 sm:p-4 sm:shadow-2xl sm:shadow-slate-950/30 xl:rounded-none xl:border-0 xl:bg-transparent xl:p-0 xl:shadow-none"
+                : "border-0 bg-transparent p-0 shadow-none sm:rounded-2xl sm:border sm:border-slate-200 sm:bg-white sm:p-4 sm:shadow-sm xl:rounded-none xl:border-0 xl:bg-transparent xl:p-0 xl:shadow-none"
               : usesWideSidebarLayout
-                ? "xl:rounded-none xl:border-0 xl:bg-transparent xl:p-0 xl:shadow-none"
-              : "xl:p-4"
+                ? `${isDark ? "border-slate-800 bg-slate-950 shadow-2xl shadow-slate-950/30" : "border-slate-200 bg-white shadow-sm"} rounded-2xl border p-3 sm:p-4 xl:rounded-none xl:border-0 xl:bg-transparent xl:p-0 xl:shadow-none`
+              : `${isDark ? "border-slate-800 bg-slate-950 shadow-2xl shadow-slate-950/30" : "border-slate-200 bg-white shadow-sm"} rounded-2xl border p-3 sm:p-4 xl:p-4`
           }`}
         >
           {center}
