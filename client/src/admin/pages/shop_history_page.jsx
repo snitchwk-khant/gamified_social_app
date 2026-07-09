@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import ShopAvatar from "../../components/shops/shop_avatar";
 import {
   buildSharedShopHistoryRecords,
   deleteShopHistoryEmployees,
@@ -8,6 +9,7 @@ import {
   getSharedShopHistoryRecords,
   getShops,
   saveShopHistoryEmployees,
+  subscribeToShops,
   upsertShopSalesTarget,
 } from "../../services/shop_service";
 import {
@@ -113,6 +115,7 @@ function buildHistoryRecords(sharedRecords = []) {
       reachedSales: String(target.current_sales ?? ""),
       shop: target.shop || null,
       shopId: target.shop_id,
+      shopAvatarUrl: target.shop?.avatar_url || target.shopAvatarUrl || null,
       shopName: target.shop?.name || "",
       targetSales: String(target.target_sales ?? ""),
       year: String(target.year),
@@ -169,8 +172,11 @@ function ShopHistoryPage() {
 
     loadShops();
 
+    const unsubscribeShops = subscribeToShops(loadShops);
+
     return () => {
       isMounted = false;
+      unsubscribeShops();
     };
   }, []);
 
@@ -721,7 +727,12 @@ function ShopHistoryPage() {
                       return (
                         <tr key={record.id} className="bg-slate-50 text-slate-700 transition hover:-translate-y-0.5 hover:bg-[#fdf7ff]">
                           <td className="rounded-l-2xl px-4 py-4 font-semibold text-slate-900">{formatMonth(record.month, record.year)}</td>
-                          <td className="px-4 py-4 font-semibold text-slate-900">{getRecordShopName(record, shops)}</td>
+                          <td className="px-4 py-4">
+                            <div className="flex min-w-0 items-center gap-3 font-semibold text-slate-900">
+                              <ShopAvatar src={record.shopAvatarUrl} name={getRecordShopName(record, shops)} size="xs" />
+                              <span className="min-w-0 truncate">{getRecordShopName(record, shops)}</span>
+                            </div>
+                          </td>
                           <td className="px-4 py-4 font-bold text-[#c446ff]">{formatNumber(achievement)}%</td>
                           <td className="px-4 py-4 font-semibold">{currentRank ? `#${currentRank}` : "--"}</td>
                           <td className="px-4 py-4 font-semibold">{formatNumber(championCount)}x</td>
@@ -766,7 +777,10 @@ function ShopHistoryPage() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="text-xs font-semibold text-slate-500">{formatMonth(record.month, record.year)}</p>
-                          <h4 className="mt-1 truncate text-lg font-bold text-slate-950">{getRecordShopName(record, shops)}</h4>
+                          <div className="mt-1 flex min-w-0 items-center gap-3">
+                            <ShopAvatar src={record.shopAvatarUrl} name={getRecordShopName(record, shops)} size="xs" />
+                            <h4 className="min-w-0 truncate text-lg font-bold text-slate-950">{getRecordShopName(record, shops)}</h4>
+                          </div>
                         </div>
                         <p className="shrink-0 rounded-full bg-[#f6e8ff] px-3 py-1 text-xs font-bold text-[#c446ff]">
                           {formatNumber(achievement)}%

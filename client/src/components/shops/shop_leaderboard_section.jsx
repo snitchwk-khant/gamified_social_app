@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import ShopAvatar from "./shop_avatar";
 import ShopLeaderboardTable from "./shop_leaderboard_table";
 import ShopTopCards from "./shop_top_cards";
 import {
   getShopAssignmentEmployees,
   getShopSalesTargets,
   subscribeToShopAssignments,
+  subscribeToShops,
   subscribeToShopTargets,
 } from "../../services/shop_service";
 import { buildShopRankingCards, buildTopShopCards } from "../../services/shop_ranking_service";
@@ -105,6 +107,14 @@ function ShopLeaderboardSection({ compact = false, isDark = false, preview = fal
     return subscribeToShopAssignments(() => loadLeaderboard(parseMonthValue(monthValue)));
   }, [loadLeaderboard, monthValue]);
 
+  useEffect(() => {
+    if (!monthValue) {
+      return undefined;
+    }
+
+    return subscribeToShops(() => loadLeaderboard(parseMonthValue(monthValue)));
+  }, [loadLeaderboard, monthValue]);
+
   const topShopRows = useMemo(() => buildTopShopCards(shopTargets, shopEmployees), [shopEmployees, shopTargets]);
 
   const shopLeaderboardRows = useMemo(() => {
@@ -130,7 +140,6 @@ function ShopLeaderboardSection({ compact = false, isDark = false, preview = fal
 
         {!loading && !error
           ? previewRows.map((shop) => {
-              const employee = getPreviewEmployee(shop);
               const progressWidth = getPreviewProgressWidth(shop.achievement);
 
               return (
@@ -146,17 +155,7 @@ function ShopLeaderboardSection({ compact = false, isDark = false, preview = fal
                       {formatPreviewRank(shop.rank)}
                     </span>
 
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-800 text-sm font-bold text-slate-200 ring-1 ring-white/10">
-                      {employee?.avatar_url ? (
-                        <img
-                          src={employee.avatar_url}
-                          alt={employee.full_name || employee.email || shop.shopName || "Leaderboard avatar"}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        getPreviewInitials(shop.shopName)
-                      )}
-                    </div>
+                    <ShopAvatar src={shop.shopAvatarUrl} name={shop.shopName} size="sm" isDark />
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-3">
@@ -309,15 +308,6 @@ function getPreviewEmployee(shop) {
 function getPreviewSubtitle(shop) {
   const employee = getPreviewEmployee(shop);
   return employee?.full_name || employee?.email || employee?.role || `${shop.employeeCount || 0} employees`;
-}
-
-function getPreviewInitials(name = "") {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("") || "S";
 }
 
 export default ShopLeaderboardSection;

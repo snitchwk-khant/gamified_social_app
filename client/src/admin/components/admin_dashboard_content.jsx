@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import ShopAvatar from "../../components/shops/shop_avatar";
 import { buildLeaderboard } from "../../services/leaderboard_service";
 import { getSalesTargets } from "../../services/sales_target_service";
 import {
   getShopAssignmentEmployees,
   getShopSalesTargets,
   getShops,
+  subscribeToShops,
 } from "../../services/shop_service";
 import { buildShopRankingCards } from "../../services/shop_ranking_service";
 
@@ -88,6 +90,8 @@ function AdminDashboardContent() {
 
   useEffect(() => {
     loadDashboard();
+
+    return subscribeToShops(loadDashboard);
   }, [loadDashboard]);
 
   const shopRanking = useMemo(
@@ -224,6 +228,7 @@ function ShopRankRow({ shop }) {
   return (
     <div className="flex items-center gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-4">
       <RankBadge rank={shop.rank} />
+      <ShopAvatar src={shop.shopAvatarUrl} name={shop.shopName} size="sm" />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-bold text-slate-950">{shop.shopName}</p>
         <p className="mt-1 text-xs font-semibold text-slate-500">{formatNumber(shop.employeeCount)} employees</p>

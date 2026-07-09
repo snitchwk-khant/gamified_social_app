@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import ShopAvatar from "../components/shops/shop_avatar";
 import { useAuth } from "../context/auth_context";
 import { useTheme } from "../context/theme_context";
 import { getMockShopProfile } from "../mocks/shop_profile_mock";
@@ -9,6 +10,7 @@ import {
   getShopEmployees,
   subscribeToShopAssignments,
   subscribeToShopHistoryEmployees,
+  subscribeToShops,
   subscribeToShopTargets,
 } from "../services/shop_service";
 import {
@@ -156,6 +158,13 @@ function ShopProfilePage() {
     loadSharedShopHistory();
 
     const unsubscribeTargets = subscribeToShopTargets(loadSharedShopHistory);
+    const unsubscribeShops = subscribeToShops((payload) => {
+      const row = payload.new || payload.old;
+
+      if (row?.id === routeShopId) {
+        loadSharedShopHistory();
+      }
+    });
     const unsubscribeHistoryEmployees = subscribeToShopHistoryEmployees((payload) => {
       const row = payload.new || payload.old;
 
@@ -175,6 +184,7 @@ function ShopProfilePage() {
     return () => {
       isMounted = false;
       unsubscribeTargets();
+      unsubscribeShops();
       unsubscribeHistoryEmployees();
       unsubscribeShopAssignments();
     };
@@ -232,6 +242,7 @@ function ShopProfilePage() {
         employeeOfMonth: shopProfileCalculations.employeeOfMonth || mockProfileData.employeeOfMonth,
         employees: currentEmployees ?? mockProfileData.employees,
         highestAchievement: shopProfileCalculations.highestAchievement || mockProfileData.highestAchievement,
+        avatar_url: shopRecord?.avatar_url || mockProfileData.avatar_url || null,
         name: shopRecord?.name || mockProfileData.name,
         rank: shopProfileCalculations.currentRank ? `#${shopProfileCalculations.currentRank}` : mockProfileData.rank,
       };
@@ -284,9 +295,13 @@ function ShopHeader({ shop, isDark, userId }) {
     >
       <div className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:text-left">
-          <div className="flex h-28 w-28 shrink-0 items-center justify-center rounded-[34px] bg-gradient-to-br from-[#c446ff] via-fuchsia-500 to-violet-700 text-4xl font-black text-white shadow-2xl shadow-fuchsia-900/30 sm:h-32 sm:w-32">
-            {getInitials(shop.name)}
-          </div>
+          <ShopAvatar
+            src={shop.avatar_url}
+            name={shop.name}
+            size="hero"
+            isDark={isDark}
+            className="rounded-[34px] border-0 shadow-2xl shadow-fuchsia-900/30"
+          />
 
           <div className="min-w-0">
             <h1 className="break-words text-4xl font-black leading-tight sm:text-5xl">{shop.name}</h1>

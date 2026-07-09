@@ -7,10 +7,16 @@ const SHOP_FIELDS = [
   "code",
   "name",
   "location",
+  "avatar_url",
   "is_active",
   "created_at",
   "updated_at",
 ].join(",");
+
+const SHOP_AVATAR_BUCKET = "shop-avatars";
+const SHOP_AVATAR_MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const SHOP_AVATAR_ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const SHOP_AVATAR_SIZE = 512;
 
 const SHOP_TARGET_FIELDS = [
   "id",
@@ -49,6 +55,8 @@ const SHOP_HISTORY_EMPLOYEE_FIELDS = [
 
 let shopTargetsChannel = null;
 const shopTargetSubscribers = new Set();
+let shopsChannel = null;
+const shopSubscribers = new Set();
 let shopAssignmentsChannel = null;
 const shopAssignmentSubscribers = new Set();
 let shopHistoryEmployeesChannel = null;
@@ -79,6 +87,77 @@ function validatePeriod(month, year) {
     month: normalizedMonth,
     year: normalizedYear,
   };
+}
+
+function validateShopAvatarFile(file) {
+  if (!file) {
+    throw new Error("Choose a shop avatar image.");
+  }
+
+  if (!SHOP_AVATAR_ALLOWED_TYPES.has(file.type)) {
+    throw new Error("Shop avatar must be a JPG, PNG, or WebP image.");
+  }
+
+  if (file.size > SHOP_AVATAR_MAX_FILE_SIZE_BYTES) {
+    throw new Error("Shop avatar must be 5 MB or smaller.");
+  }
+}
+
+function getShopAvatarPath(shopId) {
+  return `${shopId}/avatar.jpg`;
+}
+
+async function resizeShopAvatar(file) {
+  validateShopAvatarFile(file);
+
+  if (typeof document === "undefined") {
+    return file;
+  }
+
+  const imageUrl = URL.createObjectURL(file);
+
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const img = new Image();
+
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Unable to read shop avatar image."));
+      img.src = imageUrl;
+    });
+
+    const canvas = document.createElement("canvas");
+    canvas.width = SHOP_AVATAR_SIZE;
+    canvas.height = SHOP_AVATAR_SIZE;
+
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      throw new Error("Unable to process shop avatar image.");
+    }
+
+    const sourceSize = Math.min(image.naturalWidth || image.width, image.naturalHeight || image.height);
+    const sourceX = ((image.naturalWidth || image.width) - sourceSize) / 2;
+    const sourceY = ((image.naturalHeight || image.height) - sourceSize) / 2;
+
+    context.drawImage(image, sourceX, sourceY, sourceSize, sourceSize, 0, 0, SHOP_AVATAR_SIZE, SHOP_AVATAR_SIZE);
+
+    return await new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error("Unable to compress shop avatar image."));
+            return;
+          }
+
+          resolve(new File([blob], "avatar.jpg", { type: "image/jpeg" }));
+        },
+        "image/jpeg",
+        0.86
+      );
+    });
+  } finally {
+    URL.revokeObjectURL(imageUrl);
+  }
 }
 
 async function getCurrentUserId() {
@@ -118,6 +197,7 @@ export async function createShop(payload = {}) {
     code: payload.code?.trim() || null,
     name: payload.name?.trim() || "",
     location: payload.location?.trim() || null,
+    avatar_url: payload.avatar_url || null,
     is_active: payload.is_active !== false,
   };
 
@@ -148,6 +228,7 @@ export async function updateShop(shopId, patch = {}) {
   if (Object.hasOwn(patch, "code")) updatePayload.code = patch.code?.trim() || null;
   if (Object.hasOwn(patch, "name")) updatePayload.name = patch.name?.trim() || "";
   if (Object.hasOwn(patch, "location")) updatePayload.location = patch.location?.trim() || null;
+  if (Object.hasOwn(patch, "avatar_url")) updatePayload.avatar_url = patch.avatar_url || null;
   if (Object.hasOwn(patch, "is_active")) updatePayload.is_active = Boolean(patch.is_active);
 
   if (Object.hasOwn(updatePayload, "name") && !updatePayload.name) {
@@ -166,6 +247,59 @@ export async function updateShop(shopId, patch = {}) {
   }
 
   return data;
+}
+
+export async function updateShopAvatar(shopId, file, onProgress) {
+  if (!shopId) {
+    throw new Error("Shop id is required.");
+  }
+
+  onProgress?.(10);
+  const avatarFile = await resizeShopAvatar(file);
+  const filePath = getShopAvatarPath(shopId);
+
+  onProgress?.(45);
+  const { error: uploadError } = await supabase.storage
+    .from(SHOP_AVATAR_BUCKET)
+    .upload(filePath, avatarFile, {
+      cacheControl: "31536000",
+      contentType: "image/jpeg",
+      upsert: true,
+    });
+
+  if (uploadError) {
+    throw new Error(uploadError.message || "Unable to upload shop avatar.");
+  }
+
+  onProgress?.(80);
+  const { data: publicUrlData } = supabase.storage.from(SHOP_AVATAR_BUCKET).getPublicUrl(filePath);
+  const publicUrl = publicUrlData?.publicUrl ? `${publicUrlData.publicUrl}?v=${Date.now()}` : "";
+
+  if (!publicUrl) {
+    await supabase.storage.from(SHOP_AVATAR_BUCKET).remove([filePath]);
+    throw new Error("Unable to create shop avatar URL.");
+  }
+
+  const shop = await updateShop(shopId, { avatar_url: publicUrl });
+  onProgress?.(100);
+
+  return shop;
+}
+
+export async function removeShopAvatar(shopId) {
+  if (!shopId) {
+    throw new Error("Shop id is required.");
+  }
+
+  const filePath = getShopAvatarPath(shopId);
+  const shop = await updateShop(shopId, { avatar_url: null });
+  const { error } = await supabase.storage.from(SHOP_AVATAR_BUCKET).remove([filePath]);
+
+  if (error) {
+    console.error("Shop avatar delete failed:", error);
+  }
+
+  return shop;
 }
 
 export async function deleteShop(shopId) {
@@ -601,6 +735,32 @@ export function subscribeToShopTargets(onChange) {
   };
 }
 
+export function subscribeToShops(onChange) {
+  shopSubscribers.add(onChange);
+
+  if (!shopsChannel) {
+    shopsChannel = supabase
+      .channel("shops-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "shops" },
+        (payload) => {
+          shopSubscribers.forEach((subscriber) => subscriber(payload));
+        }
+      )
+      .subscribe();
+  }
+
+  return () => {
+    shopSubscribers.delete(onChange);
+
+    if (!shopSubscribers.size && shopsChannel) {
+      supabase.removeChannel(shopsChannel);
+      shopsChannel = null;
+    }
+  };
+}
+
 export function subscribeToShopAssignments(onChange) {
   shopAssignmentSubscribers.add(onChange);
 
@@ -675,11 +835,14 @@ export default {
   getShopMonthlyChampion,
   getShopSalesTargets,
   getShops,
+  removeShopAvatar,
   subscribeToShopAssignments,
   subscribeToShopHistoryEmployees,
+  subscribeToShops,
   subscribeToShopTargets,
   saveShopHistoryEmployees,
   updateShop,
+  updateShopAvatar,
   updateShopEmployees,
   upsertShopSalesTarget,
 };

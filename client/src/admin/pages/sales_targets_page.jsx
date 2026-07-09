@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/auth_context";
+import ShopAvatar from "../../components/shops/shop_avatar";
+import ShopAvatarUploader from "../../components/shops/shop_avatar_uploader";
 import {
   assignSalesTarget,
   calculateAchievement,
@@ -16,13 +18,18 @@ import {
   getShopEmployeeCounts,
   getShopSalesTargets,
   getShops,
+  removeShopAvatar,
+  subscribeToShops,
   updateShop,
+  updateShopAvatar,
   updateShopEmployees,
   upsertShopSalesTarget,
 } from "../../services/shop_service";
 import { getProfilePath } from "../../utils/profile_path";
 
 const numberFormatter = new Intl.NumberFormat();
+const SHOP_AVATAR_MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const SHOP_AVATAR_ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 function getCurrentMonthValue() {
   const now = new Date();
@@ -76,6 +83,22 @@ function validateDraft(draft) {
   return errors;
 }
 
+function validateShopAvatarFile(file) {
+  if (!file) {
+    return "Choose a shop avatar image.";
+  }
+
+  if (!SHOP_AVATAR_ALLOWED_TYPES.has(file.type)) {
+    return "Shop avatar must be a JPG, PNG, or WebP image.";
+  }
+
+  if (file.size > SHOP_AVATAR_MAX_FILE_SIZE_BYTES) {
+    return "Shop avatar must be 5 MB or smaller.";
+  }
+
+  return "";
+}
+
 function SalesTargetsPage({ mode = "employees" }) {
   const { user } = useAuth();
   const shopManagementFormRef = useRef(null);
@@ -89,8 +112,13 @@ function SalesTargetsPage({ mode = "employees" }) {
     shopId: "new",
     code: "",
     name: "",
+    avatar_url: "",
     is_active: true,
   });
+  const [shopAvatarFile, setShopAvatarFile] = useState(null);
+  const [shopAvatarPreviewUrl, setShopAvatarPreviewUrl] = useState("");
+  const [shopAvatarRemoved, setShopAvatarRemoved] = useState(false);
+  const [shopAvatarProgress, setShopAvatarProgress] = useState(0);
   const [selectedShopEmployeeIds, setSelectedShopEmployeeIds] = useState([]);
   const [shopEmployeeSearch, setShopEmployeeSearch] = useState("");
   const [shopForm, setShopForm] = useState({
@@ -185,6 +213,22 @@ function SalesTargetsPage({ mode = "employees" }) {
 
     loadShopTargets();
   }, [isManageShopsMode, isShopMode, loadShopTargets]);
+
+  useEffect(() => {
+    if (!isShopMode && !isManageShopsMode) {
+      return undefined;
+    }
+
+    return subscribeToShops(loadShopTargets);
+  }, [isManageShopsMode, isShopMode, loadShopTargets]);
+
+  useEffect(() => {
+    return () => {
+      if (shopAvatarPreviewUrl) {
+        URL.revokeObjectURL(shopAvatarPreviewUrl);
+      }
+    };
+  }, [shopAvatarPreviewUrl]);
 
   const loadEmployees = useCallback(async () => {
     setEmployeesLoading(true);
@@ -357,8 +401,13 @@ function SalesTargetsPage({ mode = "employees" }) {
         shopId: shop.id,
         code: shop.code || "",
         name: shop.name || "",
+        avatar_url: shop.avatar_url || "",
         is_active: shop.is_active !== false,
       });
+      setShopAvatarFile(null);
+      setShopAvatarPreviewUrl("");
+      setShopAvatarRemoved(false);
+      setShopAvatarProgress(0);
       setSelectedShopEmployeeIds(getEmployeeIdsForShop(shop.id));
     },
     [getEmployeeIdsForShop]
@@ -369,8 +418,13 @@ function SalesTargetsPage({ mode = "employees" }) {
       shopId: "new",
       code: "",
       name: "",
+      avatar_url: "",
       is_active: true,
     });
+    setShopAvatarFile(null);
+    setShopAvatarPreviewUrl("");
+    setShopAvatarRemoved(false);
+    setShopAvatarProgress(0);
     setSelectedShopEmployeeIds([]);
     setShopEmployeeSearch("");
   };
@@ -607,6 +661,50 @@ function SalesTargetsPage({ mode = "employees" }) {
     setNotice("");
   };
 
+  const handleShopAvatarFileSelect = (file) => {
+    const validationError = validateShopAvatarFile(file);
+
+    if (validationError) {
+      setShopErrors((current) => ({
+        ...current,
+        avatar: validationError,
+      }));
+      return;
+    }
+
+    if (shopAvatarPreviewUrl) {
+      URL.revokeObjectURL(shopAvatarPreviewUrl);
+    }
+
+    setShopAvatarFile(file);
+    setShopAvatarPreviewUrl(URL.createObjectURL(file));
+    setShopAvatarRemoved(false);
+    setShopAvatarProgress(0);
+    setShopErrors((current) => ({
+      ...current,
+      avatar: "",
+    }));
+    setError("");
+    setNotice("");
+  };
+
+  const handleRemoveShopAvatarSelection = () => {
+    if (shopAvatarPreviewUrl) {
+      URL.revokeObjectURL(shopAvatarPreviewUrl);
+    }
+
+    setShopAvatarFile(null);
+    setShopAvatarPreviewUrl("");
+    setShopAvatarRemoved(true);
+    setShopAvatarProgress(0);
+    setShopErrors((current) => ({
+      ...current,
+      avatar: "",
+    }));
+    setError("");
+    setNotice("");
+  };
+
   const handleSelectManagementShop = (shopId) => {
     if (shopId === "new") {
       resetShopManagementForm();
@@ -695,7 +793,15 @@ function SalesTargetsPage({ mode = "employees" }) {
           ? await createShop(shopManagementForm)
           : await updateShop(shopManagementForm.shopId, shopManagementForm);
 
-      await updateShopEmployees(savedShop.id, selectedShopEmployeeIds);
+      let finalShop = savedShop;
+
+      if (shopAvatarFile) {
+        finalShop = await updateShopAvatar(savedShop.id, shopAvatarFile, setShopAvatarProgress);
+      } else if (shopAvatarRemoved && savedShop.avatar_url) {
+        finalShop = await removeShopAvatar(savedShop.id);
+      }
+
+      await updateShopEmployees(finalShop.id, selectedShopEmployeeIds);
       await loadShopTargets();
       resetShopManagementForm();
       setNotice(wasCreatingShop ? "Shop created successfully." : "Shop updated successfully.");
@@ -972,6 +1078,21 @@ function SalesTargetsPage({ mode = "employees" }) {
               </button>
             </div>
 
+            <div className="mt-5">
+              <ShopAvatarUploader
+                avatarUrl={shopManagementForm.avatar_url}
+                disabled={shopManagementSaving}
+                onFileSelect={handleShopAvatarFileSelect}
+                onRemove={handleRemoveShopAvatarSelection}
+                previewUrl={shopAvatarPreviewUrl}
+                progress={shopAvatarProgress}
+                removed={shopAvatarRemoved}
+                shopName={shopManagementForm.name || selectedManagementShop?.name || "Shop"}
+                uploading={shopManagementSaving && Boolean(shopAvatarFile)}
+              />
+              {shopErrors.avatar ? <p className="mt-2 text-xs text-rose-600">{shopErrors.avatar}</p> : null}
+            </div>
+
             <div className="mt-5 grid gap-4 lg:grid-cols-3">
               <label className="block text-sm font-medium text-slate-700">
                 Existing Shop
@@ -1141,7 +1262,12 @@ function SalesTargetsPage({ mode = "employees" }) {
                   ) : filteredShopManagementRows.length ? (
                     filteredShopManagementRows.map((shop) => (
                       <tr key={shop.id} className="text-slate-700">
-                        <td className="px-5 py-4 font-semibold text-slate-950">{shop.name}</td>
+                        <td className="px-5 py-4">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <ShopAvatar shop={shop} size="sm" />
+                            <span className="min-w-0 truncate font-semibold text-slate-950">{shop.name}</span>
+                          </div>
+                        </td>
                         <td className="px-5 py-4">{shop.code || "N/A"}</td>
                         <td className="px-5 py-4">{formatNumber(shop.employeeCount)}</td>
                         <td className="px-5 py-4">
@@ -1278,7 +1404,12 @@ function SalesTargetsPage({ mode = "employees" }) {
                     shopLeaderboardRows.map((target) => (
                       <tr key={target.id} className="text-slate-700">
                         <td className="px-5 py-4 font-semibold text-slate-950">#{target.rank}</td>
-                        <td className="px-5 py-4 font-semibold text-slate-950">{target.shopName}</td>
+                        <td className="px-5 py-4">
+                          <div className="flex min-w-0 items-center gap-3 font-semibold text-slate-950">
+                            <ShopAvatar src={target.shopAvatarUrl} name={target.shopName} size="xs" />
+                            <span className="min-w-0 truncate">{target.shopName}</span>
+                          </div>
+                        </td>
                         <td className="px-5 py-4">
                           <span className="rounded-full bg-[#f6e8ff] px-3 py-1 text-xs font-semibold text-[#c446ff]">
                             {formatNumber(target.achievement)}%

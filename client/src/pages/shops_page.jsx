@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import ShopAvatar from "../components/shops/shop_avatar";
 import { useTheme } from "../context/theme_context";
 import { getLeaderboardDisplayPeriod } from "../services/leaderboard_settings_service";
 import { calculateChampionCount } from "../services/shop_history_calculation_service";
@@ -9,6 +10,7 @@ import {
   getShops,
   getShopSalesTargets,
   subscribeToShopAssignments,
+  subscribeToShops,
   subscribeToShopTargets,
 } from "../services/shop_service";
 import { getShopPath } from "../utils/shop_path";
@@ -174,6 +176,10 @@ function ShopsPage() {
     return subscribeToShopTargets(loadShops);
   }, [loadShops]);
 
+  useEffect(() => {
+    return subscribeToShops(loadShops);
+  }, [loadShops]);
+
   const employeeCounts = useMemo(() => getShopEmployeeCounts(employees), [employees]);
   const employeesByShop = useMemo(() => getEmployeesByShop(employees), [employees]);
   const leaderboardRowsByShopId = useMemo(() => getLeaderboardRowsByShopId(leaderboardRows), [leaderboardRows]);
@@ -289,9 +295,7 @@ function ShopsPage() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#c446ff] to-[#6d5dfc] text-sm font-bold text-white shadow-lg shadow-purple-500/20">
-                      {getInitials(shop.name, shop.code)}
-                    </div>
+                    <ShopAvatar shop={shop} size="md" isDark={isDark} />
                     <div className="min-w-0">
                       <h2 className="truncate text-base font-bold">{shop.name}</h2>
                       {shop.code ? (

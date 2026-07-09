@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { AvatarGroup } from "./shop_leaderboard_table";
+import ShopAvatar from "./shop_avatar";
 import { getShopPath } from "../../utils/shop_path";
 
 const numberFormatter = new Intl.NumberFormat();
@@ -103,7 +104,7 @@ function ShopTopCards({ rows = [], isDark = false }) {
       </div>
 
       <div className="mt-3 flex justify-center">
-        <AvatarGroup employees={target.employees} isDark={isDark} size="sm" />
+        <ShopAvatar src={target.shopAvatarUrl} name={target.shopName} size="lg" isDark={isDark} />
       </div>
 
       <Link
@@ -117,7 +118,11 @@ function ShopTopCards({ rows = [], isDark = false }) {
 
       <p className={`mt-2 text-xs font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>Achievement</p>
 
-      <div className="mt-1 flex justify-center">
+      <div className="mt-2 flex justify-center">
+        <AvatarGroup employees={target.employees} isDark={isDark} size="sm" maxVisible={4} />
+      </div>
+
+      <div className="mt-2 flex justify-center">
         <span
           className={`rounded-full px-3 py-1 text-lg font-black leading-none sm:text-xl ${
             isDark ? "bg-[#c446ff]/15 text-slate-100" : "bg-[#f6e8ff] text-[#c446ff]"

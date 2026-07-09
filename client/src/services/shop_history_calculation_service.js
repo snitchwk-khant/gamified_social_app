@@ -76,6 +76,7 @@ export function buildShopHistoryRanking(historyRecords = [], { searchTerm = "" }
   ).map((record) => ({
     ...record,
     achievement: record.achievement_percent ?? record.achievement,
+    shopAvatarUrl: record.shop?.avatar_url || record.shop?.avatarUrl || null,
     shopName: record.shop?.name || "Unnamed shop",
   }));
 }

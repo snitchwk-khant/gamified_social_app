@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/auth_context";
+import ShopAvatar from "./shop_avatar";
 import { getProfilePath } from "../../utils/profile_path";
 import { getShopPath } from "../../utils/shop_path";
 
@@ -63,12 +64,15 @@ function ShopLeaderboardTable({ rows = [], isDark = false }) {
           }`}
         >
           <div className="flex items-start justify-between gap-3">
-            <Link
-              to={getShopPath(target.shop_id)}
-              className={`min-w-0 truncate text-xl font-bold transition hover:text-[#c446ff] ${isDark ? "text-slate-100" : "text-slate-950"}`}
-            >
-              🏪 {target.shopName}
-            </Link>
+            <div className="flex min-w-0 items-center gap-3">
+              <ShopAvatar src={target.shopAvatarUrl} name={target.shopName} size="sm" isDark={isDark} />
+              <Link
+                to={getShopPath(target.shop_id)}
+                className={`min-w-0 truncate text-xl font-bold transition hover:text-[#c446ff] ${isDark ? "text-slate-100" : "text-slate-950"}`}
+              >
+                {target.shopName}
+              </Link>
+            </div>
             <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${getRankBadgeClass(isDark)}`}>
               {formatRank(target.rank)}
             </span>
