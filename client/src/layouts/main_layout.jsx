@@ -14,6 +14,8 @@ import { buildShopRankingCards } from "../services/shop_ranking_service";
 import { getShopPath } from "../utils/shop_path";
 
 const LEADERBOARD_STORAGE_KEY = "gemify-show-welcome-leaderboard";
+const WELCOME_POPUP_AUTO_DISMISS_MS = 5000;
+const WELCOME_POPUP_FADE_MS = 280;
 const achievementFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
 const PLACEHOLDER_LEADERBOARD = [
   {
@@ -106,6 +108,7 @@ function MainLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [showHighlights, setShowHighlights] = useState(false);
+  const [isHighlightsClosing, setIsHighlightsClosing] = useState(false);
   const [leaderboardRows, setLeaderboardRows] = useState([]);
   const [userShopSummary, setUserShopSummary] = useState(null);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
@@ -120,9 +123,40 @@ function MainLayout() {
 
     if (pendingHighlights && (pendingHighlights === "true" || pendingHighlights === user.id)) {
       window.sessionStorage.removeItem(LEADERBOARD_STORAGE_KEY);
+      setIsHighlightsClosing(false);
       setShowHighlights(true);
     }
   }, [user?.id]);
+
+  useEffect(() => {
+    if (!showHighlights) {
+      setIsHighlightsClosing(false);
+      return undefined;
+    }
+
+    const autoDismissTimer = window.setTimeout(() => {
+      setIsHighlightsClosing(true);
+    }, WELCOME_POPUP_AUTO_DISMISS_MS);
+
+    return () => {
+      window.clearTimeout(autoDismissTimer);
+    };
+  }, [showHighlights]);
+
+  useEffect(() => {
+    if (!isHighlightsClosing) {
+      return undefined;
+    }
+
+    const closeTimer = window.setTimeout(() => {
+      setShowHighlights(false);
+      setIsHighlightsClosing(false);
+    }, WELCOME_POPUP_FADE_MS);
+
+    return () => {
+      window.clearTimeout(closeTimer);
+    };
+  }, [isHighlightsClosing]);
 
   useEffect(() => {
     let isMounted = true;
@@ -171,11 +205,13 @@ function MainLayout() {
   }, [showHighlights, user?.id]);
 
   const handleCloseHighlights = () => {
+    setIsHighlightsClosing(false);
     setShowHighlights(false);
     navigate("/home");
   };
 
   const handleViewLeaderboard = () => {
+    setIsHighlightsClosing(false);
     setShowHighlights(false);
     navigate("/shops");
   };
@@ -193,6 +229,7 @@ function MainLayout() {
       return;
     }
 
+    setIsHighlightsClosing(false);
     setShowHighlights(false);
     navigate(getShopPath(shopId));
   };
@@ -229,14 +266,18 @@ function MainLayout() {
       />
 
       {showHighlights ? (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/60 p-2 backdrop-blur-sm">
+        <div
+          className={`fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/60 p-2 backdrop-blur-sm transition-opacity duration-[280ms] ${
+            isHighlightsClosing ? "opacity-0" : "opacity-100"
+          }`}
+        >
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="welcome-leaderboard-title"
-            className={`max-h-[70vh] w-[78vw] max-w-[320px] animate-[welcome-leaderboard-in_180ms_ease-out] overflow-hidden rounded-2xl border p-3 shadow-2xl sm:max-w-[340px] ${
+            className={`relative max-h-[70vh] w-[78vw] max-w-[320px] animate-[welcome-leaderboard-in_180ms_ease-out] overflow-hidden rounded-2xl border p-3 pb-[calc(0.75rem+3px)] shadow-2xl transition-transform duration-[280ms] sm:max-w-[340px] ${
               isDark ? "border-slate-800 bg-slate-900 text-slate-100" : "border-slate-200 bg-white text-slate-950"
-            }`}
+            } ${isHighlightsClosing ? "scale-[0.985]" : "scale-100"}`}
           >
             <div className="text-center">
               <h2 id="welcome-leaderboard-title" className="text-lg font-bold leading-tight">
@@ -270,6 +311,7 @@ function MainLayout() {
 
                         if (event.key === "Enter" || event.key === " ") {
                           event.preventDefault();
+                          setIsHighlightsClosing(false);
                           setShowHighlights(false);
                           navigate(getShopPath(row.shop_id));
                         }
@@ -286,6 +328,7 @@ function MainLayout() {
                               href={getShopPath(row.shop_id)}
                               onClick={(event) => {
                                 event.preventDefault();
+                                setIsHighlightsClosing(false);
                                 setShowHighlights(false);
                                 navigate(getShopPath(row.shop_id));
                               }}
@@ -338,6 +381,7 @@ function MainLayout() {
 
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
+                      setIsHighlightsClosing(false);
                       setShowHighlights(false);
                       navigate(getShopPath(userShopSummary.shop_id));
                     }
@@ -356,6 +400,7 @@ function MainLayout() {
                           href={getShopPath(userShopSummary.shop_id)}
                           onClick={(event) => {
                             event.preventDefault();
+                            setIsHighlightsClosing(false);
                             setShowHighlights(false);
                             navigate(getShopPath(userShopSummary.shop_id));
                           }}
@@ -404,6 +449,13 @@ function MainLayout() {
                 View Leaderboard
               </button>
             </div>
+            <div className="absolute inset-x-0 bottom-0 h-[3px] overflow-hidden rounded-b-2xl">
+              <div
+                className={`h-full origin-left rounded-b-2xl bg-gradient-to-r from-[#c446ff] via-fuchsia-400 to-sky-400 shadow-[0_0_12px_rgba(196,70,255,0.85)] ${
+                  isHighlightsClosing ? "opacity-0" : "animate-[welcome-leaderboard-progress_5000ms_linear_forwards]"
+                }`}
+              />
+            </div>
           </div>
           <style>
             {`@keyframes welcome-leaderboard-in {
@@ -414,6 +466,15 @@ function MainLayout() {
               to {
                 opacity: 1;
                 transform: scale(1);
+              }
+            }
+
+            @keyframes welcome-leaderboard-progress {
+              from {
+                transform: scaleX(1);
+              }
+              to {
+                transform: scaleX(0);
               }
             }`}
           </style>
