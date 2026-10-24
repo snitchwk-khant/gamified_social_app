@@ -9,9 +9,9 @@ import {
   getProfileAlbumImages,
   getProfileById,
   getProfileStats,
+  getProfileViewCount,
   recordProfileView,
   saveProfile,
-  subscribeToProfileViews,
   updateProfileAvatar,
   uploadProfileAlbumImage,
 } from "../services/profile_service";
@@ -290,9 +290,15 @@ function ProfilePage() {
         const createdView = await recordProfileView(profile.id);
 
         if (isActive && createdView) {
+          const profileViewsCount = await getProfileViewCount(profile.id);
+
+          if (!isActive) {
+            return;
+          }
+
           setStats((current) => ({
             ...current,
-            profileViewsCount: current.profileViewsCount + 1,
+            profileViewsCount,
           }));
         }
       } catch (err) {
@@ -306,27 +312,6 @@ function ProfilePage() {
       isActive = false;
     };
   }, [isOwnProfile, profile?.id, user?.id]);
-
-  useEffect(() => {
-    if (!profileUserId) {
-      return undefined;
-    }
-
-    const channel = subscribeToProfileViews(profileUserId, (profileView) => {
-      if (profileView?.viewer_id === user?.id) {
-        return;
-      }
-
-      setStats((current) => ({
-        ...current,
-        profileViewsCount: current.profileViewsCount + 1,
-      }));
-    });
-
-    return () => {
-      channel?.unsubscribe();
-    };
-  }, [profileUserId, user?.id]);
 
   const handleChange = (field) => (event) => {
     setForm((current) => ({

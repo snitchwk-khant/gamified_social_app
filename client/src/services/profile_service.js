@@ -271,7 +271,7 @@ export async function getProfileStats(userId, stories = null) {
       .eq("user_id", userId)
       .eq("is_anonymous", false),
     getActiveStoryCountByUserId(userId, stories),
-    getProfileViewsCountResult(userId),
+    getProfileViewCountResult(userId),
   ]);
 
   if (postsError) {
@@ -287,6 +287,35 @@ export async function getProfileStats(userId, stories = null) {
     storiesCount,
     profileViewsCount: profileViewsError ? 0 : profileViewsCount || 0,
   };
+}
+
+export async function getProfileViewCount(profileId) {
+  if (!profileId) {
+    return 0;
+  }
+
+  const { data, error } = await supabase.rpc("get_profile_view_count", {
+    target_profile_id: profileId,
+  });
+
+  if (!error) {
+    return normalizeProfileViewCount(data);
+  }
+
+  if (!isMissingProfileViewCountRpcError(error)) {
+    throw error;
+  }
+
+  const { count, error: fallbackError } = await supabase
+    .from("profile_views")
+    .select("id", { count: "exact", head: true })
+    .eq("profile_id", profileId);
+
+  if (fallbackError) {
+    throw fallbackError;
+  }
+
+  return normalizeProfileViewCount(count);
 }
 
 export async function recordProfileView(profileId) {
@@ -351,35 +380,36 @@ export async function recordProfileView(profileId) {
   return Boolean(data?.id);
 }
 
-export function subscribeToProfileViews(profileId, onProfileView) {
-  if (!profileId || typeof onProfileView !== "function") {
-    return null;
+async function getProfileViewCountResult(profileId) {
+  try {
+    return {
+      count: await getProfileViewCount(profileId),
+      error: null,
+    };
+  } catch (error) {
+    return {
+      count: 0,
+      error,
+    };
   }
-
-  const channel = supabase
-    .channel(`profile-views:${profileId}`)
-    .on(
-      "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "profile_views",
-        filter: `profile_id=eq.${profileId}`,
-      },
-      (payload) => {
-        onProfileView(payload.new);
-      },
-    )
-    .subscribe();
-
-  return channel;
 }
 
-function getProfileViewsCountResult(userId) {
-  return supabase
-    .from("profile_views")
-    .select("id", { count: "exact", head: true })
-    .eq("profile_id", userId);
+function isMissingProfileViewCountRpcError(error) {
+  return (
+    error?.code === "PGRST202" &&
+    typeof error?.message === "string" &&
+    error.message.includes("get_profile_view_count")
+  );
+}
+
+function normalizeProfileViewCount(value) {
+  const count = Number(value);
+
+  if (!Number.isSafeInteger(count) || count < 0) {
+    throw new TypeError("Profile view count must be a non-negative safe integer.");
+  }
+
+  return count;
 }
 
 function getProfileViewSessionKey(profileId, viewerId) {
@@ -809,10 +839,10 @@ export default {
   getProfileAlbumImages,
   getProfileById,
   getProfileStats,
+  getProfileViewCount,
   recordProfileView,
   saveProfile,
   searchProfiles,
-  subscribeToProfileViews,
   updateProfileAvatar,
   uploadAvatar,
   uploadProfileAlbumImage,
