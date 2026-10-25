@@ -3,15 +3,15 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../context/auth_context";
 import { supabase } from "../../lib/supabase";
 import { getProfilePath } from "../../utils/profile_path";
-
-const EMPLOYEE_DETAIL_FIELDS = "id,avatar_url,full_name,email,role,employment_start_date";
+import {
+  EMPLOYEE_DETAIL_FIELDS,
+  getEmploymentStartDateValidationError,
+  normalizeDateValue,
+  setProfileEmploymentStartDate,
+} from "../services/employment_date_service";
 
 function getTodayDateValue() {
   return new Date().toISOString().slice(0, 10);
-}
-
-function normalizeDateValue(value) {
-  return value ? value.toString().slice(0, 10) : "";
 }
 
 function formatRole(role) {
@@ -110,8 +110,13 @@ function EmployeeDetailsPage() {
   };
 
   const saveStartDate = async (employee) => {
-    if (draftStartDate && draftStartDate > getTodayDateValue()) {
-      setFieldError("Start Date cannot be in the future.");
+    const validationError = getEmploymentStartDateValidationError(
+      draftStartDate,
+      getTodayDateValue()
+    );
+
+    if (validationError) {
+      setFieldError(validationError);
       return;
     }
 
@@ -121,19 +126,7 @@ function EmployeeDetailsPage() {
     setError("");
 
     try {
-      const { data, error: updateError } = await supabase
-        .from("profiles")
-        .update({
-          employment_start_date: draftStartDate || null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", employee.id)
-        .select(EMPLOYEE_DETAIL_FIELDS)
-        .single();
-
-      if (updateError) {
-        throw updateError;
-      }
+      const data = await setProfileEmploymentStartDate(supabase, employee.id, draftStartDate);
 
       setEmployees((current) => current.map((item) => (item.id === employee.id ? data : item)));
       setEditingId("");
