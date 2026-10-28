@@ -1,7 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { AuthProvider, useAuth } from "./context/auth_context";
-import { SocketProvider } from "./context/socket_context";
 import { ThemeProvider, useTheme } from "./context/theme_context";
 import AdminLayout from "./admin/layouts/admin_layout";
 import { adminRoutes, createAdminRouteElement } from "./admin/routes/admin_routes";
@@ -262,7 +261,6 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <SocketProvider>
           <NetworkShell>
             <BrowserRouter>
               <DeepLinkBridge />
@@ -323,7 +321,6 @@ function App() {
               </Routes>
             </BrowserRouter>
           </NetworkShell>
-        </SocketProvider>
       </AuthProvider>
     </ThemeProvider>
   );

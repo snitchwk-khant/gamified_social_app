@@ -1,0 +1,9 @@
+diff --git a/client/src/App.jsx b/client/src/App.jsx
+--- a/client/src/App.jsx
++++ b/client/src/App.jsx
+@@ -3,0 +4 @@
++import { SocketProvider } from "./context/socket_context";
+@@ -263,0 +265 @@
++        <SocketProvider>
+@@ -323,0 +326 @@
++        </SocketProvider>
