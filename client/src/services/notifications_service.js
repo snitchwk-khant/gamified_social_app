@@ -600,7 +600,7 @@ export async function createSocialNotification({ recipientId, type, postId, comm
     return { data: null, error: new Error("Missing social notification fields.") };
   }
 
-  if (type === "post_reaction" || type === "post_comment" || type === "comment_reply" || type === "mention") {
+  if (type === "post_reaction") {
     return { data: null, error: null };
   }
 

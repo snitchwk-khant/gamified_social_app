@@ -1,0 +1,96 @@
+diff --git a/client/src/components/center_feed/post_card.jsx b/client/src/components/center_feed/post_card.jsx
+--- a/client/src/components/center_feed/post_card.jsx
++++ b/client/src/components/center_feed/post_card.jsx
+@@ -712,0 +713,40 @@ function PostCard({
++  function getMentionedUserIds(content) {
++    const normalizedContent = String(content || "").toLowerCase();
++
++    return [
++      ...new Set(
++        mentionUsers
++          .filter((mentionUser) => {
++            const name = mentionUser.full_name?.toLowerCase();
++            return name && normalizedContent.includes(`@${name}`);
++          })
++          .map((mentionUser) => mentionUser.id)
++      ),
++    ];
++  }
++
++  async function createCommentNotification(targetUserId, title, message, commentId) {
++    if (!targetUserId || targetUserId === user?.id) {
++      return;
++    }
++
++    const { error } = await supabase.rpc("create_comment_notification", {
++      target_user_id: targetUserId,
++      notification_title: title,
++      notification_message: message,
++      source_post_id: id,
++      source_comment_id: commentId,
++      notification_category: "Mention",
++    });
++
++    if (error) {
++      console.error("Create Comment Notification Error:", {
++        code: error.code,
++        message: error.message,
++        details: error.details,
++        hint: error.hint,
++        error,
++      });
++    }
++  }
++
+@@ -735,0 +776,35 @@ function PostCard({
++  async function notifyCommentRecipients(content, commentId) {
++    const recipientIds = new Map();
++
++    getMentionedUserIds(content).forEach((recipientId) => {
++      recipientIds.set(recipientId, "You were mentioned in a comment.");
++    });
++
++    await Promise.all(
++      Array.from(recipientIds.entries()).map(([recipientId, title]) =>
++        createCommentNotification(recipientId, title, content, commentId)
++      )
++    );
++  }
++
++  async function notifyPostCommentInteraction(insertedComment, parentComment = null) {
++    if (!insertedComment?.id) {
++      return;
++    }
++
++    if (parentComment?.user_id) {
++      await createPostInteractionNotification({
++        targetUserId: parentComment.user_id,
++        type: "comment_reply",
++        commentId: insertedComment.id,
++      });
++      return;
++    }
++
++    await createPostInteractionNotification({
++      targetUserId: authorUserId,
++      type: "post_comment",
++      commentId: insertedComment.id,
++    });
++  }
++
+@@ -742,0 +818,3 @@ function PostCard({
++    const parentComment = resolvedParentCommentId
++      ? comments.find((comment) => comment.id === resolvedParentCommentId) || null
++      : null;
+@@ -780,0 +859,5 @@ function PostCard({
++    await Promise.all([
++      notifyPostCommentInteraction(data, parentComment),
++      notifyCommentRecipients(trimmedContent, data.id),
++    ]);
++
+diff --git a/client/src/services/notifications_service.js b/client/src/services/notifications_service.js
+--- a/client/src/services/notifications_service.js
++++ b/client/src/services/notifications_service.js
+@@ -603 +603 @@ export async function createSocialNotification({ recipientId, type, postId, comm
+-  if (type === "post_reaction") {
++  if (type === "post_reaction" || type === "post_comment" || type === "comment_reply" || type === "mention") {

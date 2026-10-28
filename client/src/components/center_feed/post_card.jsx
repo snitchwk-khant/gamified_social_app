@@ -710,46 +710,6 @@ function PostCard({
     });
   }
 
-  function getMentionedUserIds(content) {
-    const normalizedContent = String(content || "").toLowerCase();
-
-    return [
-      ...new Set(
-        mentionUsers
-          .filter((mentionUser) => {
-            const name = mentionUser.full_name?.toLowerCase();
-            return name && normalizedContent.includes(`@${name}`);
-          })
-          .map((mentionUser) => mentionUser.id)
-      ),
-    ];
-  }
-
-  async function createCommentNotification(targetUserId, title, message, commentId) {
-    if (!targetUserId || targetUserId === user?.id) {
-      return;
-    }
-
-    const { error } = await supabase.rpc("create_comment_notification", {
-      target_user_id: targetUserId,
-      notification_title: title,
-      notification_message: message,
-      source_post_id: id,
-      source_comment_id: commentId,
-      notification_category: "Mention",
-    });
-
-    if (error) {
-      console.error("Create Comment Notification Error:", {
-        code: error.code,
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        error,
-      });
-    }
-  }
-
   async function createPostInteractionNotification({ targetUserId, type, commentId = null }) {
     if (!targetUserId || targetUserId === user?.id) {
       return;
@@ -773,41 +733,6 @@ function PostCard({
     }
   }
 
-  async function notifyCommentRecipients(content, commentId) {
-    const recipientIds = new Map();
-
-    getMentionedUserIds(content).forEach((recipientId) => {
-      recipientIds.set(recipientId, "You were mentioned in a comment.");
-    });
-
-    await Promise.all(
-      Array.from(recipientIds.entries()).map(([recipientId, title]) =>
-        createCommentNotification(recipientId, title, content, commentId)
-      )
-    );
-  }
-
-  async function notifyPostCommentInteraction(insertedComment, parentComment = null) {
-    if (!insertedComment?.id) {
-      return;
-    }
-
-    if (parentComment?.user_id) {
-      await createPostInteractionNotification({
-        targetUserId: parentComment.user_id,
-        type: "comment_reply",
-        commentId: insertedComment.id,
-      });
-      return;
-    }
-
-    await createPostInteractionNotification({
-      targetUserId: authorUserId,
-      type: "post_comment",
-      commentId: insertedComment.id,
-    });
-  }
-
   async function handleCommentSubmit(content, isAnonymous = false, parentCommentId = null) {
     if (!user?.id) return false;
 
@@ -815,9 +740,6 @@ function PostCard({
     if (!trimmedContent) return false;
 
     const resolvedParentCommentId = parentCommentId || null;
-    const parentComment = resolvedParentCommentId
-      ? comments.find((comment) => comment.id === resolvedParentCommentId) || null
-      : null;
 
     const insertPayload = {
       post_id: id,
@@ -855,11 +777,6 @@ function PostCard({
     if (typeof onCommentCreated === "function") {
       onCommentCreated(id);
     }
-
-    await Promise.all([
-      notifyPostCommentInteraction(data, parentComment),
-      notifyCommentRecipients(trimmedContent, data.id),
-    ]);
 
     return true;
   }
