@@ -1,0 +1,14 @@
+diff --git a/client/src/App.jsx b/client/src/App.jsx
+--- a/client/src/App.jsx
++++ b/client/src/App.jsx
+@@ -21,0 +22 @@
++import NativePushBridge from "./components/notifications/NativePushBridge";
+@@ -268,0 +270 @@
++              <NativePushBridge />
+diff --git a/client/src/context/auth_context.jsx b/client/src/context/auth_context.jsx
+--- a/client/src/context/auth_context.jsx
++++ b/client/src/context/auth_context.jsx
+@@ -3,0 +4 @@
++import { deactivateNativePushInstallation } from "../services/native_push_service";
+@@ -184,0 +186 @@
++        await deactivateNativePushInstallation();
